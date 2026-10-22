@@ -69,6 +69,14 @@ Same design language on the Windows app and the Android Link Check app (already 
 | Accent | `#1A9FFF` → `#0B6FD1` | primary button, toggles, focus ring, selection |
 | Good / warn / bad | `#59BF40` / `#E6B450` / `#E5534B` | status pills |
 
+**Approved Windows window layout (2026-10-22):**
+- Title bar: app icon + "OphiStreamer", minimize/close.
+- Left sidebar (~150 px): `OPHISTREAMER` wordmark, then Stream · Devices · Network · Firewall · Settings; selected item has a blue tint and a 3 px blue bar on the left.
+- Stream page hero card (blue gradient when active, flat when off): "Gaming mode active / off", subtitle "HONOR X7d connected · 5 GHz · channel 44", large blue switch on the right, four stat tiles (Latency, Band, Signal dBm, Spikes; dimmed when off).
+- "Connect your phone" card: hotspot name [Copy], password [Show], Moonlight address 192.168.137.1 [Copy].
+- "Optimizations" card: Freeze Wi-Fi scanning (switch), Wi-Fi max performance (switch), Firewall rules, Controller driver (ViGEmBus), On charger, each with a status pill.
+- Footer: "Fix stream connection" (secondary) + "Start/Stop gaming mode" (blue gradient primary).
+
 Patterns: uppercase letter-spaced section headers; settings-style rows (label left, value right, thin dividers); status pills with a coloured dot; large stat tiles; one big gradient primary action; segmented controls; 52 dp+ touch targets; **full gamepad/keyboard navigation with a visible blue focus ring** on the Windows window. Font: Segoe UI Variable (Windows), system sans (Android).
 
 ---
