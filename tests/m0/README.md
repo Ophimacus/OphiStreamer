@@ -24,11 +24,13 @@ Target laptop: **Acer Nitro 5 AN515-52, Windows 11** (usually an Intel Wireless-
 **Phone (Honor X7d)**
 - Battery: power saving **off**; Moonlight set to **no battery restrictions** (Settings → Apps → Moonlight → Battery).
 - Wi-Fi settings: turn off **Wi-Fi+** / auto-switch to mobile data if present.
-- Moonlight: 1280×720 or 1920×1080 at **60 fps**, bitrate **15–20 Mbps** to start, **H.265 (HEVC)**, frame pacing **lowest latency**, **performance overlay on**.
+- Moonlight: **1280×720 at 60 fps**, **H.265 (HEVC)**, bitrate **10 Mbps** to start, frame pacing **lowest latency**, **performance overlay on**, on-screen controls off.
+- Controller: plug in the GameSir and turn on **OTG** (Settings → search "OTG"). The Link Check app shows live button input to confirm it works.
 - Run the **OphiStreamer Tester** app once on your normal home Wi-Fi first (baseline), then on the hotspot.
 
 **Sunshine**
 - Check the Sunshine log says it's using **NVENC** (the NVIDIA GPU), not the Intel iGPU.
+- **ViGEmBus** installed (Sunshine's installer offers it) so the controller reaches games. The test checks this.
 
 ## Run
 1. Double-click **`Firewall-Setup.cmd`** and approve the admin prompt. This adds temporary rules for Sunshine on the hotspot network.

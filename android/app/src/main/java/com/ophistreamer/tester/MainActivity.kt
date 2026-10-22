@@ -6,33 +6,40 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
+import android.view.InputDevice
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
@@ -46,15 +53,18 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -63,27 +73,74 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private val Bg = Color(0xFF0E1116)
-private val PanelBg = Color(0xFF181C23)
-private val Muted = Color(0xFF8B949E)
-private val Green = Color(0xFF3DDC84)
-private val Amber = Color(0xFFFFC107)
-private val Red = Color(0xFFFF5252)
+// SteamOS-inspired palette: deep navy, slate text, bright blue accent.
+private val BgTop = Color(0xFF1B2838)
+private val BgBottom = Color(0xFF0B0F14)
+private val CardBg = Color(0xFF151C25)
+private val CardBorder = Color(0xFF26313E)
+private val Divider = Color(0xFF212B37)
+private val TextMain = Color(0xFFDCDEDF)
+private val Muted = Color(0xFF8B98A5)
+private val Accent = Color(0xFF1A9FFF)
+private val AccentDeep = Color(0xFF0B6FD1)
+private val Good = Color(0xFF59BF40)
+private val Warn = Color(0xFFE6B450)
+private val Bad = Color(0xFFE5534B)
+private val HeroTop = Color(0xFF2A475E)
 
-enum class Level(val color: Color) { PASS(Green), WARN(Amber), FAIL(Red), INFO(Muted) }
+private val CardShape = RoundedCornerShape(6.dp)
+
+enum class Level(val color: Color) { PASS(Good), WARN(Warn), FAIL(Bad), INFO(Muted) }
 
 data class Check(val name: String, val level: Level, val detail: String)
+
+/** Live gamepad input, fed by the activity so it works whatever has focus. */
+object GamepadInput {
+    var lastButton by mutableStateOf("")
+    var leftX by mutableFloatStateOf(0f)
+    var leftY by mutableFloatStateOf(0f)
+    var rightX by mutableFloatStateOf(0f)
+    var rightY by mutableFloatStateOf(0f)
+    var events by mutableIntStateOf(0)
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme(primary = Green, background = Bg, surface = PanelBg)) {
-                Surface(Modifier.fillMaxSize(), color = Bg) {
+            MaterialTheme(colorScheme = darkColorScheme(primary = Accent, background = BgBottom, surface = CardBg)) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Brush.verticalGradient(listOf(BgTop, BgBottom))),
+                ) {
                     TesterScreen(onKeepScreenOn = ::keepScreenOn)
                 }
             }
         }
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.isFromSource(InputDevice.SOURCE_GAMEPAD) && KeyEvent.isGamepadButton(event.keyCode)) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                GamepadInput.lastButton = KeyEvent.keyCodeToString(event.keyCode).removePrefix("KEYCODE_")
+                GamepadInput.events++
+            }
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        if (event.isFromSource(InputDevice.SOURCE_JOYSTICK) && event.action == MotionEvent.ACTION_MOVE) {
+            GamepadInput.leftX = event.getAxisValue(MotionEvent.AXIS_X)
+            GamepadInput.leftY = event.getAxisValue(MotionEvent.AXIS_Y)
+            GamepadInput.rightX = event.getAxisValue(MotionEvent.AXIS_Z)
+            GamepadInput.rightY = event.getAxisValue(MotionEvent.AXIS_RZ)
+            GamepadInput.events++
+            return true
+        }
+        return super.dispatchGenericMotionEvent(event)
     }
 
     private fun keepScreenOn(on: Boolean) {
@@ -100,6 +157,10 @@ fun TesterScreen(onKeepScreenOn: (Boolean) -> Unit) {
 
     var wifi by remember { mutableStateOf(NetProbe.wifiStatus(context)) }
     var host by remember { mutableStateOf(wifi.gateway ?: "192.168.137.1") }
+    var controllers by remember { mutableStateOf(DeviceProbe.controllers()) }
+    val screen = remember { DeviceProbe.screen(context) }
+    val decoders = remember { DeviceProbe.decoders() }
+    val advice = remember { DeviceProbe.advice(screen, decoders) }
     var durationSec by remember { mutableIntStateOf(60) }
     var running by remember { mutableStateOf(false) }
     var progress by remember { mutableFloatStateOf(0f) }
@@ -114,6 +175,12 @@ fun TesterScreen(onKeepScreenOn: (Boolean) -> Unit) {
     val hasLocation = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
         PackageManager.PERMISSION_GRANTED
 
+    fun refresh() {
+        wifi = NetProbe.wifiStatus(context)
+        wifi.gateway?.let { host = it }
+        controllers = DeviceProbe.controllers()
+    }
+
     fun runTest() = scope.launch {
         running = true
         copied = false
@@ -121,15 +188,18 @@ fun TesterScreen(onKeepScreenOn: (Boolean) -> Unit) {
         samples.clear()
         progress = 0f
         onKeepScreenOn(true)
+        val locks = DeviceProbe.acquireStreamingWifiLocks(context)
         try {
             val results = mutableListOf<Check>()
 
             phase = "Checking Wi-Fi"
             wifi = NetProbe.wifiStatus(context)
+            controllers = DeviceProbe.controllers()
             results += wifiChecks(wifi)
+            results += controllerCheck(controllers)
             val net = NetProbe.wifiNetwork(context)
 
-            phase = "Checking Sunshine ports on $host"
+            phase = "Checking Sunshine on $host"
             val open = withContext(Dispatchers.IO) {
                 NetProbe.SUNSHINE_TCP_PORTS.associateWith { NetProbe.tcpConnectMs(net, host, it) != null }
             }
@@ -158,10 +228,19 @@ fun TesterScreen(onKeepScreenOn: (Boolean) -> Unit) {
             }
             checks = results
         } finally {
+            DeviceProbe.release(locks)
             running = false
             phase = ""
             onKeepScreenOn(false)
         }
+    }
+
+    val ready = checks.isNotEmpty() && checks.none { it.level == Level.FAIL }
+    val status = when {
+        running -> "Testing" to Accent
+        checks.isEmpty() -> (if (wifi.connected) "Not tested" else "Offline") to Muted
+        ready -> "Ready to stream" to Good
+        else -> "Needs attention" to Bad
     }
 
     Column(
@@ -169,41 +248,134 @@ fun TesterScreen(onKeepScreenOn: (Boolean) -> Unit) {
             .fillMaxSize()
             .safeDrawingPadding()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text("OphiStreamer Tester", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text(
-            "Checks this phone's link to the PC before you stream with Moonlight. Join the laptop's hotspot, make sure Sunshine is running, then run the test.",
-            style = MaterialTheme.typography.bodySmall,
-            color = Muted,
-        )
-
-        Panel {
-            Text("Wi-Fi", fontWeight = FontWeight.SemiBold)
-            if (!wifi.connected) {
-                Text("Not connected to Wi-Fi", color = Red)
-            } else {
-                InfoRow("Network", wifi.ssid ?: "hidden (tap Show name)")
-                InfoRow("Band", "${wifi.band} (${wifi.frequencyMhz} MHz)", bandLevel(wifi).color)
-                InfoRow("Signal", "${wifi.rssiDbm} dBm", signalLevel(wifi.rssiDbm).color)
-                InfoRow("Link speed", "${wifi.linkMbps} Mbps", linkLevel(wifi.linkMbps).color)
-                InfoRow("Phone IP", wifi.phoneIp ?: "-")
-                InfoRow("PC address", wifi.gateway ?: "-")
+        // ---- Top bar
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("OPHISTREAMER", color = Accent, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 3.sp)
+                Text("Link Check", color = TextMain, fontSize = 24.sp, fontWeight = FontWeight.Bold)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = {
-                    wifi = NetProbe.wifiStatus(context)
-                    wifi.gateway?.let { host = it }
-                }, enabled = !running) { Text("Refresh") }
-                if (!hasLocation) {
-                    OutlinedButton(onClick = {
-                        permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-                    }) { Text("Show name") }
+            Pill(status.first, status.second)
+        }
+
+        // ---- Hero
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .border(1.dp, CardBorder, CardShape)
+                .background(Brush.verticalGradient(listOf(HeroTop, CardBg)), CardShape)
+                .padding(16.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Column {
+                    Text(
+                        if (wifi.connected) "Connected to ${wifi.ssid ?: "Wi-Fi"}" else "Not on Wi-Fi",
+                        color = TextMain, fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        if (wifi.connected) "PC at ${wifi.gateway ?: "?"} · ${wifi.frequencyMhz} MHz"
+                        else "Join the laptop's hotspot to begin",
+                        color = Muted, fontSize = 13.sp,
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StatTile(if (wifi.connected) wifi.band else "-", "BAND", bandLevel(wifi).color)
+                    StatTile(if (wifi.connected) "${wifi.rssiDbm}" else "-", "SIGNAL dBm", signalLevel(wifi.rssiDbm).color)
+                    StatTile(if (wifi.connected) "${wifi.linkMbps}" else "-", "LINK Mbps", linkLevel(wifi.linkMbps).color)
                 }
             }
         }
 
+        // ---- Connection
+        SectionHeader("Connection")
+        SteamCard {
+            SettingRow("Network", wifi.ssid ?: if (wifi.connected) "Name hidden" else "-")
+            SettingRow("Phone IP", wifi.phoneIp ?: "-")
+            SettingRow("PC address", wifi.gateway ?: "-")
+            SettingRow(
+                "Internet on hotspot",
+                if (wifi.hasInternet) "Yes" else "No",
+                if (wifi.hasInternet) Good else Warn,
+                sub = if (wifi.connected && !wifi.hasInternet) "Android's low-latency Wi-Fi mode needs it" else null,
+                last = true,
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SecondaryButton("Refresh", enabled = !running, modifier = Modifier.weight(1f)) { refresh() }
+            if (!hasLocation) {
+                SecondaryButton("Show Wi-Fi name", modifier = Modifier.weight(1f)) {
+                    permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                }
+            }
+        }
+
+        // ---- Controller
+        SectionHeader("Controller")
+        SteamCard {
+            if (controllers.isEmpty()) {
+                SettingRow("No controller found", "", sub = "Plug in the GameSir, turn on OTG, then tap Refresh")
+            } else {
+                for (c in controllers) {
+                    SettingRow(
+                        c.name,
+                        if (c.external) "Connected" else "Built-in",
+                        Good,
+                        sub = "ID %04x:%04x · rumble %s".format(c.vendorId, c.productId, if (c.vibrates) "yes" else "no"),
+                    )
+                }
+            }
+            SettingRow(
+                "Live input",
+                GamepadInput.lastButton.ifBlank { "Press a button" },
+                if (GamepadInput.events > 0) Accent else Muted,
+                sub = "L %+.2f %+.2f   R %+.2f %+.2f".format(
+                    GamepadInput.leftX, GamepadInput.leftY, GamepadInput.rightX, GamepadInput.rightY,
+                ),
+                last = true,
+            )
+        }
+
+        // ---- Phone
+        SectionHeader("This phone")
+        SteamCard {
+            SettingRow("Screen", "${screen.widthPx}×${screen.heightPx} · ${screen.maxRefreshHz} Hz")
+            decoders.forEachIndexed { i, d ->
+                SettingRow(
+                    d.label,
+                    if (d.codecName == null) "Not supported"
+                    else "720p ${fpsText(d.maxFps720)} · 1080p ${fpsText(d.maxFps1080)}",
+                    when {
+                        d.codecName == null -> Muted
+                        d.hardware -> Good
+                        else -> Warn
+                    },
+                    sub = d.codecName?.let { if (d.hardware) "Hardware decoder" else "Software only, avoid" },
+                    last = i == decoders.lastIndex,
+                )
+            }
+        }
+
+        // ---- Moonlight advice
+        SectionHeader("Moonlight settings for this phone")
+        SteamCard {
+            SettingRow("Resolution", advice.resolution)
+            SettingRow("Frame rate", "${advice.fps} fps")
+            SettingRow("Video codec", advice.codec)
+            SettingRow("Bitrate", "${advice.bitrateMbps} Mbps")
+            SettingRow("Frame pacing", "Prefer lowest latency")
+            SettingRow("Performance overlay", "On")
+            SettingRow(
+                "Next step",
+                "",
+                sub = advice.tryLater ?: "Raise bitrate in small steps while the overlay shows no drops",
+                last = true,
+            )
+        }
+
+        // ---- Test controls
+        SectionHeader("Link test")
         OutlinedTextField(
             value = host,
             onValueChange = { host = it.trim() },
@@ -211,87 +383,253 @@ fun TesterScreen(onKeepScreenOn: (Boolean) -> Unit) {
             singleLine = true,
             enabled = !running,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+            shape = CardShape,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Accent,
+                unfocusedBorderColor = CardBorder,
+                focusedLabelColor = Accent,
+                unfocusedLabelColor = Muted,
+                focusedTextColor = TextMain,
+                unfocusedTextColor = TextMain,
+                cursorColor = Accent,
+                focusedContainerColor = CardBg,
+                unfocusedContainerColor = CardBg,
+            ),
             modifier = Modifier.fillMaxWidth(),
         )
+        Segmented(
+            options = listOf(30, 60, 120),
+            selected = durationSec,
+            label = { "${it}s" },
+            enabled = !running,
+        ) { durationSec = it }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Latency test", color = Muted)
-            for (s in listOf(30, 60, 120)) {
-                FilterChip(
-                    selected = durationSec == s,
-                    onClick = { durationSec = s },
-                    label = { Text("${s}s") },
-                    enabled = !running,
-                )
-            }
-        }
-
-        Button(onClick = { runTest() }, enabled = !running && host.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
-            Text(if (running) "Testing..." else "Run full test")
-        }
+        PrimaryButton(
+            text = if (running) "Testing…" else "Run link test",
+            enabled = !running && host.isNotBlank(),
+        ) { runTest() }
 
         if (running) {
-            LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
-            Text(phase, style = MaterialTheme.typography.bodySmall, color = Muted)
+            LinearProgressIndicator(
+                progress = { progress },
+                color = Accent,
+                trackColor = CardBorder,
+                modifier = Modifier.fillMaxWidth().height(4.dp),
+            )
+            Text(phase, color = Muted, fontSize = 12.sp)
         }
 
+        // ---- Latency
         if (samples.isNotEmpty()) {
             val stats = LatencyStats(samples.toList())
-            Panel {
-                Text("Latency to PC", fontWeight = FontWeight.SemiBold)
-                LatencyChart(
-                    samples = samples,
-                    expected = (durationSec * 1000 / NetProbe.SAMPLE_INTERVAL_MS).toInt(),
-                    modifier = Modifier.fillMaxWidth().height(120.dp),
-                )
-                Text(
-                    "avg %.1f ms · p99 %.1f ms · max %.1f ms · spikes ≥50 ms: %d · lost %d/%d".format(
-                        stats.avg, stats.p99, stats.max, stats.spikes, stats.lost, stats.sent,
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Muted,
-                )
-            }
-        }
-
-        if (checks.isNotEmpty()) {
-            Panel {
-                Text("Results", fontWeight = FontWeight.SemiBold)
-                for (c in checks) {
+            SectionHeader("Latency to PC")
+            SteamCard {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    LatencyChart(
+                        samples = samples,
+                        expected = (durationSec * 1000 / NetProbe.SAMPLE_INTERVAL_MS).toInt(),
+                        modifier = Modifier.fillMaxWidth().height(110.dp),
+                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(c.level.name, color = c.level.color, fontFamily = FontFamily.Monospace, modifier = Modifier.width(44.dp))
-                        Column {
-                            Text(c.name)
-                            if (c.detail.isNotBlank()) Text(c.detail, style = MaterialTheme.typography.bodySmall, color = Muted)
-                        }
+                        StatTile("%.1f".format(stats.avg), "AVG ms", TextMain)
+                        StatTile("%.1f".format(stats.p99), "P99 ms", TextMain)
+                        StatTile("${stats.spikes}", "SPIKES", if (stats.spikes == 0) Good else Warn)
+                        StatTile("${stats.lost}", "LOST", if (stats.lost == 0) Good else Bad)
                     }
                 }
             }
+        }
+
+        // ---- Results
+        if (checks.isNotEmpty()) {
+            SectionHeader("Results")
+            SteamCard {
+                checks.forEachIndexed { i, c ->
+                    ResultRow(c, last = i == checks.lastIndex)
+                }
+            }
             if (!running) {
-                OutlinedButton(onClick = {
+                SecondaryButton(if (copied) "Copied - paste it to Claude" else "Copy report") {
                     val stats = if (samples.isEmpty()) null else LatencyStats(samples.toList())
-                    clipboard.setText(AnnotatedString(buildReport(context, wifi, host, checks, stats)))
+                    clipboard.setText(
+                        AnnotatedString(buildReport(context, wifi, host, checks, stats, screen, decoders, advice, controllers)),
+                    )
                     copied = true
-                }, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (copied) "Copied - paste it to Claude" else "Copy report")
                 }
             }
         }
+
+        Text(
+            "Holds the same Wi-Fi locks as Moonlight during the test.",
+            color = Muted.copy(alpha = 0.6f), fontSize = 11.sp,
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+// ---------------------------------------------------------------- components
+
+@Composable
+private fun SectionHeader(text: String) {
+    Text(
+        text.uppercase(),
+        color = Muted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.6.sp,
+        modifier = Modifier.padding(top = 10.dp, start = 4.dp),
+    )
+}
+
+@Composable
+private fun SteamCard(content: @Composable () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .border(1.dp, CardBorder, CardShape)
+            .background(CardBg, CardShape),
+    ) { content() }
+}
+
+@Composable
+private fun SettingRow(
+    label: String,
+    value: String,
+    valueColor: Color = TextMain,
+    sub: String? = null,
+    last: Boolean = false,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(label, color = TextMain, fontSize = 15.sp)
+            if (sub != null) Text(sub, color = Muted, fontSize = 12.sp)
+        }
+        if (value.isNotEmpty()) {
+            Text(value, color = valueColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.End)
+        }
+    }
+    if (!last) HorizontalDivider(color = Divider, thickness = 1.dp, modifier = Modifier.padding(horizontal = 16.dp))
+}
+
+@Composable
+private fun ResultRow(c: Check, last: Boolean) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(c.name, color = TextMain, fontSize = 15.sp)
+            if (c.detail.isNotBlank()) Text(c.detail, color = Muted, fontSize = 12.sp)
+        }
+        Pill(c.level.name, c.level.color)
+    }
+    if (!last) HorizontalDivider(color = Divider, thickness = 1.dp, modifier = Modifier.padding(horizontal = 16.dp))
+}
+
+@Composable
+private fun Pill(text: String, color: Color) {
+    Row(
+        Modifier
+            .background(color.copy(alpha = 0.16f), CircleShape)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(Modifier.size(7.dp).background(color, CircleShape))
+        Text(text.uppercase(), color = color, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
     }
 }
 
 @Composable
-private fun Panel(content: @Composable () -> Unit) {
-    Card(colors = CardDefaults.cardColors(containerColor = PanelBg), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { content() }
+private fun RowScope.StatTile(value: String, label: String, color: Color) {
+    Column(
+        Modifier
+            .weight(1f)
+            .background(Color.Black.copy(alpha = 0.25f), CardShape)
+            .padding(vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(value, color = color, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = Muted, fontSize = 10.sp, letterSpacing = 1.sp)
     }
 }
 
 @Composable
-private fun InfoRow(label: String, value: String, valueColor: Color = Color.Unspecified) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, color = Muted)
-        Text(value, color = valueColor)
+private fun PrimaryButton(text: String, enabled: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .alpha(if (enabled) 1f else 0.45f)
+            .background(Brush.horizontalGradient(listOf(Accent, AccentDeep)), RoundedCornerShape(4.dp))
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text.uppercase(), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+    }
+}
+
+@Composable
+private fun SecondaryButton(
+    text: String,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier.fillMaxWidth(),
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier
+            .height(46.dp)
+            .alpha(if (enabled) 1f else 0.45f)
+            .border(1.dp, CardBorder, RoundedCornerShape(4.dp))
+            .background(Color(0xFF1F2833), RoundedCornerShape(4.dp))
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, color = TextMain, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun <T> Segmented(
+    options: List<T>,
+    selected: T,
+    label: (T) -> String,
+    enabled: Boolean,
+    onSelect: (T) -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .border(1.dp, CardBorder, CardShape)
+            .background(CardBg, CardShape)
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        for (o in options) {
+            val isSel = o == selected
+            Box(
+                Modifier
+                    .weight(1f)
+                    .height(38.dp)
+                    .background(if (isSel) Accent else Color.Transparent, RoundedCornerShape(4.dp))
+                    .clickable(enabled = enabled) { onSelect(o) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    label(o),
+                    color = if (isSel) Color.White else Muted,
+                    fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
     }
 }
 
@@ -302,19 +640,23 @@ private fun LatencyChart(samples: List<Double?>, expected: Int, modifier: Modifi
         val step = size.width / maxOf(samples.size, expected, 1)
         val barWidth = step.coerceAtLeast(1f)
         val spikeY = size.height * (1 - (LatencyStats.SPIKE_MS / maxMs)).toFloat()
-        drawLine(Amber.copy(alpha = 0.4f), Offset(0f, spikeY), Offset(size.width, spikeY), 2f)
+        drawLine(Warn.copy(alpha = 0.35f), Offset(0f, spikeY), Offset(size.width, spikeY), 2f)
         samples.forEachIndexed { i, v ->
             val x = i * step + barWidth / 2
             if (v == null) {
-                drawLine(Red, Offset(x, 0f), Offset(x, size.height), barWidth)
+                drawLine(Bad, Offset(x, 0f), Offset(x, size.height), barWidth)
             } else {
                 val h = (v.coerceAtMost(maxMs) / maxMs * size.height).toFloat().coerceAtLeast(2f)
-                val color = if (v >= LatencyStats.SPIKE_MS) Amber else Green
+                val color = if (v >= LatencyStats.SPIKE_MS) Warn else Accent
                 drawLine(color, Offset(x, size.height), Offset(x, size.height - h), barWidth)
             }
         }
     }
 }
+
+// ---------------------------------------------------------------- checks
+
+private fun fpsText(fps: Int) = if (fps == 0) "no" else "$fps fps"
 
 private fun bandLevel(w: WifiStatus) = when (w.band) {
     "5 GHz", "6 GHz" -> Level.PASS
@@ -348,8 +690,21 @@ private fun wifiChecks(w: WifiStatus): List<Check> {
         ),
         Check("Signal", signalLevel(w.rssiDbm), "${w.rssiDbm} dBm (good is -60 or higher)"),
         Check("Link speed", linkLevel(w.linkMbps), "${w.linkMbps} Mbps (good is 200 or more)"),
+        Check(
+            "Internet on hotspot",
+            if (w.hasInternet) Level.PASS else Level.WARN,
+            if (w.hasInternet) "Android can use its low-latency Wi-Fi mode"
+            else "Without it Android won't enable low-latency Wi-Fi mode. Keep the laptop sharing its internet.",
+        ),
     )
 }
+
+private fun controllerCheck(list: List<ControllerInfo>): Check =
+    if (list.isEmpty()) {
+        Check("Controller", Level.WARN, "None found. Plug in the GameSir and turn on OTG.")
+    } else {
+        Check("Controller", Level.PASS, list.joinToString { it.name })
+    }
 
 private fun portCheck(open: Map<Int, Boolean>): Check {
     val list = open.entries.joinToString { "${it.key} ${if (it.value) "open" else "closed"}" }
@@ -376,14 +731,37 @@ private fun latencyCheck(s: LatencyStats): Check {
     return Check("Latency", level, detail)
 }
 
-private fun buildReport(context: Context, w: WifiStatus, host: String, checks: List<Check>, stats: LatencyStats?): String {
+@Suppress("DEPRECATION")
+private fun buildReport(
+    context: Context,
+    w: WifiStatus,
+    host: String,
+    checks: List<Check>,
+    stats: LatencyStats?,
+    screen: ScreenInfo,
+    decoders: List<DecoderInfo>,
+    advice: MoonlightAdvice,
+    controllers: List<ControllerInfo>,
+): String {
     val version = context.packageManager.getPackageInfo(context.packageName, 0).versionName
     return buildString {
-        appendLine("OphiStreamer Tester report")
+        appendLine("OphiStreamer Link Check report")
         appendLine("Date: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())}")
         appendLine("Phone: ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}, app $version")
-        appendLine("Wi-Fi: ${w.ssid ?: "?"} | ${w.band} ${w.frequencyMhz} MHz | ${w.rssiDbm} dBm | ${w.linkMbps} Mbps")
+        appendLine("Screen: ${screen.widthPx}x${screen.heightPx} @ ${screen.maxRefreshHz} Hz")
+        for (d in decoders) {
+            appendLine(
+                "Decoder ${d.label}: ${d.codecName ?: "none"} (${if (d.hardware) "hw" else "sw"}), " +
+                    "720p ${d.maxFps720} fps, 1080p ${d.maxFps1080} fps",
+            )
+        }
+        appendLine("Wi-Fi: ${w.ssid ?: "?"} | ${w.band} ${w.frequencyMhz} MHz | ${w.rssiDbm} dBm | ${w.linkMbps} Mbps | internet ${w.hasInternet}")
         appendLine("Phone IP: ${w.phoneIp ?: "?"} | PC: $host")
+        for (c in controllers) {
+            appendLine("Controller: ${c.name} (%04x:%04x, external ${c.external}, rumble ${c.vibrates})".format(c.vendorId, c.productId))
+        }
+        if (controllers.isEmpty()) appendLine("Controller: none")
+        appendLine("Advice: ${advice.resolution} @ ${advice.fps} fps, ${advice.codec}, ${advice.bitrateMbps} Mbps; ${advice.tryLater ?: "-"}")
         if (stats != null) {
             appendLine(
                 "Latency: avg %.1f ms, p99 %.1f ms, max %.1f ms, spikes>=50ms %d, lost %d/%d".format(

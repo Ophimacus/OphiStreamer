@@ -347,6 +347,26 @@ try {
         Record 'Hotspot idle timeout' 'INFO' "PeerlessTimeoutEnabled = $peerless"
     }
 
+    $battery = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($battery) {
+        if ($battery.BatteryStatus -eq 2) { Record 'On charger' 'PASS' "battery $($battery.EstimatedChargeRemaining)%" }
+        else { Record 'On charger' 'WARN' 'Running on battery: Windows throttles the Wi-Fi card and GPU encoder. Plug in.' }
+    }
+    Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue |
+        ForEach-Object { Record 'GPU' 'INFO' "$($_.Name) (driver $($_.DriverVersion))" }
+
+    $sunshine = Get-Process sunshine -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($sunshine) { Record 'Sunshine running' 'PASS' $sunshine.Path }
+    else { Record 'Sunshine running' 'WARN' 'Start Sunshine before the Moonlight step' }
+
+    # Sunshine creates a virtual Xbox pad through ViGEmBus; without it the controller does nothing in games.
+    $vigem = Get-Service -Name ViGEmBus -ErrorAction SilentlyContinue
+    if ($vigem) {
+        Record 'Controller driver (ViGEmBus)' 'PASS' "installed, $($vigem.Status)"
+    } else {
+        Record 'Controller driver (ViGEmBus)' 'WARN' 'Not installed: the phone controller will not reach games. Re-run the Sunshine installer and tick ViGEmBus.'
+    }
+
     # ------------------------------------------------------------ 2. Hotspot
     Section '2. Mobile Hotspot (no admin)'
 

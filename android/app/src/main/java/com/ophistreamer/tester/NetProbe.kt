@@ -20,6 +20,8 @@ data class WifiStatus(
     val linkMbps: Int = 0,
     val phoneIp: String? = null,
     val gateway: String? = null,
+    /** Android only enables its low-latency Wi-Fi mode when the Wi-Fi network has validated internet. */
+    val hasInternet: Boolean = false,
 ) {
     val band: String
         get() = when (frequencyMhz) {
@@ -80,6 +82,8 @@ object NetProbe {
             linkMbps = info?.linkSpeed ?: 0,
             phoneIp = phoneIp,
             gateway = gateway,
+            hasInternet = cm.getNetworkCapabilities(net)
+                ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true,
         )
     }
 

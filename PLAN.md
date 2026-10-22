@@ -15,7 +15,7 @@ Works on any Windows 10 (2004+) / Windows 11 PC whose Wi-Fi card supports Mobile
 | Decision | Choice | Why |
 |---|---|---|
 | Runtime | **C# / .NET 10 LTS** (supported to Nov 2028) | Stable, native Windows APIs, single-file self-contained `.exe` |
-| UI | **WinForms** | Built-in `NotifyIcon` for the tray; no extra packages |
+| UI | **WPF** window + WinForms `NotifyIcon` for the tray (both built into .NET 10) | WPF can deliver the SteamOS-style look (gradients, rounded cards, big toggles); WinForms only supplies the tray icon. No extra packages |
 | Hotspot control | **`NetworkOperatorTetheringManager`** (official WinRT API) | Start/stop, band, client list, SSID/password — no registry hacks |
 | Lag fix | **`WlanSetInterface`** (wlanapi.dll): background scan **off**, media streaming mode **on** | No admin needed; Windows reverts it when the app's handle closes (even on crash); Wi-Fi can still reconnect |
 | Admin rights | **Only once, in the installer** | Installer creates firewall rules + disables hotspot idle timeout. The app itself runs as a normal user |
@@ -53,6 +53,41 @@ Reference / prior art:
 - Editing hotspot name/password
 - "Max mode" fallback: `netsh wlan set autoconfig enabled=no` via an elevated helper, only if streaming mode alone doesn't remove lag on some adapters
 - Glow animations / themes
+
+---
+
+## 2b. Look and feel: SteamOS-inspired
+
+Same design language on the Windows app and the Android Link Check app (already built). Inspired by SteamOS, without any Valve/Steam names or logos.
+
+| Token | Value | Use |
+|---|---|---|
+| Background | gradient `#1B2838` → `#0B0F14` | window / screen |
+| Card | `#151C25`, border `#26313E`, radius 6 | grouped settings |
+| Hero | gradient `#2A475E` → card | status header |
+| Text / muted | `#DCDEDF` / `#8B98A5` | body / labels |
+| Accent | `#1A9FFF` → `#0B6FD1` | primary button, toggles, focus ring, selection |
+| Good / warn / bad | `#59BF40` / `#E6B450` / `#E5534B` | status pills |
+
+Patterns: uppercase letter-spaced section headers; settings-style rows (label left, value right, thin dividers); status pills with a coloured dot; large stat tiles; one big gradient primary action; segmented controls; 52 dp+ touch targets; **full gamepad/keyboard navigation with a visible blue focus ring** on the Windows window. Font: Segoe UI Variable (Windows), system sans (Android).
+
+---
+
+## 2c. Phone + controller tuning (Honor X7d + GameSir)
+
+**Phone facts** (spec sites): Snapdragon 685, Adreno 610, 6.77" 1610×720 LCD at 120 Hz, Wi-Fi 5 dual-band. Decoder reported as H.264/HEVC 1080p60 (the Link Check app reads the real limits from the phone).
+
+- Stream **1280×720 @ 60 fps, HEVC, ~10 Mbps** first. The screen is 720p, so 1080p only adds decode load and bitrate. Try 90/120 fps later only if the Link Check app shows the decoder supports it.
+- **Keep internet sharing on the hotspot.** Android only enables its low-latency Wi-Fi mode (radio power-save off, which Moonlight requests via `WIFI_MODE_FULL_LOW_LATENCY`) when the Wi-Fi network has validated internet. A hotspot with no internet quietly loses this.
+- MagicOS: Moonlight → battery **No restrictions**, App launch **manage manually** (run in background on), power saving off, Wi-Fi+ off.
+- Targets from Sunshine's docs: packet loss < 5 %, jitter < 1 ms.
+
+**Controller (GameSir, USB-C)**
+- Wired USB-C is the best case: no Bluetooth radio sharing airtime with the 5 GHz stream (if a Bluetooth model, keep the stream on 5 GHz; Bluetooth is 2.4 GHz only).
+- Phone: turn on **OTG** (MagicOS can switch it off after idle).
+- PC: **ViGEmBus** must be installed (Sunshine's installer offers it); Sunshine turns phone input into a virtual Xbox pad. The m0 test checks it.
+- Moonlight: on-screen controls off, "mouse emulation via gamepad" off (avoids Start long-press conflicts), rumble on.
+- Link Check app shows the detected controller, its USB ID, rumble support, and live button/stick input.
 
 ---
 
