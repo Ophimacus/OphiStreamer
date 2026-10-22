@@ -117,7 +117,7 @@ Goal: no drops, no spikes. Layers, in order of impact:
 - **Fast reconnect watchdog:** if the link drops, reconnect to the phone profile immediately via `WlanConnect` (don't wait for Windows), then re-apply the lag fix. Log every drop with RSSI/tx rate so calibration can show it.
 - Wi-Fi power plan **Maximum Performance** while active; restore on exit.
 - Intel adapter advanced settings (one-time, admin, shown as a checklist with "Apply" in the installer): Roaming Aggressiveness **Lowest**, MIMO Power Save **No SMPS**, U-APSD **Disabled**, Packet Coalescing **Disabled**, Preferred Band **5 GHz**. (Dell/Intel support list these options; values chosen for a fixed, single network.)
-- Optional toggle "Pause location services while streaming": user reports link periodic jitter to Wi-Fi-based location scans (anecdotal, so it's an A/B option measured by calibration, not a default).
+- Optional toggle "Pause location services while streaming": a forum user linked periodic jitter to Wi-Fi-based location scans (anecdotal, so it's an A/B option measured by calibration, not a default).
 
 **2. Phone hotspot**
 - 5 GHz AP band; turn off any "auto-turn-off hotspot when idle" option; **mobile data off** (no internet needed, no background downloads over the link).
