@@ -99,6 +99,43 @@ Patterns: uppercase letter-spaced section headers; settings-style rows (label le
 
 ---
 
+## 2d. One-click experience (the promise)
+
+**Install (once, on the Acer):** run `OphiStreamerSetup.exe` → **Install** → approve **one** Windows admin prompt. The installer, silently:
+1. Installs OphiStreamer and starts it at logon (tray).
+2. Installs **Sunshine** (`winget install LizardByte.Sunshine`) and **ViGEmBus** (`winget install ViGEm.ViGEmBus`) if missing, both IDs confirmed in winget. Checkboxes, ticked by default.
+3. Adds the firewall rules (Sunshine + calibration port, hotspot subnet only) and turns off the hotspot's 5-minute idle shutdown.
+
+**First run (once):** a 3-step welcome wizard in the SteamOS style:
+1. **Network check:** Intel card → "Connect this laptop to your 5 GHz Wi-Fi" (detects when done, auto-continues).
+2. **Join the phone:** hotspot starts on 5 GHz and shows a **Wi-Fi QR code**; scan with the Honor camera to join (Android remembers it, so it auto-joins next time). Waits for the phone, then "HONOR X7d connected".
+3. **Pair Moonlight:** in Moonlight tap the PC, enter the 4-digit PIN shown; the wizard shows where to type it (one-time Sunshine pairing). Then it runs **calibration** (below) automatically.
+
+**Every day after that:** one click on **Start gaming mode** (tray or window) → 5 GHz hotspot on + lag fix on → waits for the phone → phone auto-joins → "Ready", open Moonlight and tap the PC. Stop: one click, or it restores by itself when the phone leaves / laptop sleeps.
+
+**What can and can't be guaranteed**
+- Guaranteed by the app: one installer, one admin prompt, one click to start/stop, automatic restore, a clear on-screen fix instead of a silent failure for every known problem.
+- Depends on hardware (Milestone 0 confirms): 5 GHz on Intel needs the laptop connected to 5 GHz Wi-Fi; if the driver refuses 5 GHz, the app falls back to 2.4 GHz and says so.
+- One-time manual steps that can't be automated: Moonlight PIN pairing, and typing the calibrated settings into Moonlight (Moonlight has no settings API). The phone app shows exactly what to enter.
+
+---
+
+## 2e. Calibration (both apps)
+
+The Windows app runs a small **calibration service** on the hotspot only (TCP + UDP port **47900**, firewall-scoped to `192.168.137.0/24`; outside Sunshine's 47984–48010). The phone's Link Check app finds it at the hotspot gateway.
+
+**Run from either app** ("Calibrate" button on PC and phone; same result shown on both):
+1. **Link quality (30 s):** UDP echo every 20 ms with the Wi-Fi locks held, giving latency, jitter, loss and spike count. Repeated with the scan freeze off and on to prove the fix on this laptop.
+2. **Throughput ramp (PC → phone, same direction as video):** PC sends UDP at 5, 10, 15, 20, 30, 40, 50 Mbps for 3 s each; phone reports loss and jitter per step. Highest clean step (< 1 % loss, jitter < 2 ms) = link capacity.
+3. **Phone decoder + screen:** from Link Check (codec, max fps at 720p/1080p, refresh rate).
+4. **Result profile:** resolution, fps, codec, **bitrate = 70 % of clean capacity** (capped by decoder), frame pacing, plus a grade (Excellent / Good / Fix needed + why). Saved on both sides with the date, channel and band.
+
+**PC side also calibrates:** current band/channel (warns on DFS or 2.4 GHz), Wi-Fi power mode, charger, encoder in use (NVENC vs iGPU from Sunshine log). Optional: apply the bitrate cap to Sunshine through its local web API once the user enters their Sunshine login (stored encrypted with Windows DPAPI).
+
+**Re-calibrate prompt:** when the band/channel changes or latency drifts from the saved profile.
+
+---
+
 ## 3. Exact logic
 
 ### Toggle ON
