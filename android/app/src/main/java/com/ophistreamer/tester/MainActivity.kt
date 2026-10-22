@@ -174,7 +174,7 @@ fun TesterScreen(onKeepScreenOn: (Boolean) -> Unit) {
     ) {
         Text("OphiStreamer Tester", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text(
-            "Stands in for the Steam Deck. Join the laptop's hotspot, make sure Sunshine is running, then run the test.",
+            "Checks this phone's link to the PC before you stream with Moonlight. Join the laptop's hotspot, make sure Sunshine is running, then run the test.",
             style = MaterialTheme.typography.bodySmall,
             color = Muted,
         )

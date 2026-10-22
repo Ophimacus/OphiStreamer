@@ -4,7 +4,7 @@
     OphiStreamer Milestone 0 - hardware proof test.
 
 .DESCRIPTION
-    Run on a laptop with Wi-Fi (ideally with a Steam Deck nearby) from a NORMAL,
+    Run on a laptop with Wi-Fi (with your Android phone nearby) from a NORMAL,
     non-admin PowerShell window. It checks the assumptions PLAN.md depends on:
 
       Hotspot    Mobile Hotspot starts without admin
@@ -12,8 +12,8 @@
       WlanSet    WlanSetInterface (background scan off, streaming mode on) works without admin
       Revert     Those settings are undone when the app closes its handle
       Crash      Those settings are undone when the app is killed
-      Deck       Steam Deck connects to the hotspot
-      Lag        Latency spikes are lower with the fix (pings the Deck or the router)
+      Phone      The phone connects to the hotspot
+      Lag        Latency spikes are lower with the fix (pings the phone or the router)
       Moonlight  Moonlight streams over the hotspot (you answer y/n)
 
     Everything it changes is put back at the end. A report (without your hotspot
@@ -23,15 +23,15 @@
     powershell -NoProfile -ExecutionPolicy Bypass -File .\m0-hardware-proof.ps1
 
 .EXAMPLE
-    .\m0-hardware-proof.ps1 -NoDeck -LagSeconds 120
+    .\m0-hardware-proof.ps1 -NoPhone -LagSeconds 120
 #>
 [CmdletBinding()]
 param(
     # Seconds per latency phase. Windows scans roughly once a minute, so keep this >= 90.
     [int]$LagSeconds = 90,
     [switch]$SkipLagTest,
-    # Skip everything that needs a Steam Deck (lag test falls back to pinging the router).
-    [switch]$NoDeck,
+    # Skip everything that needs the phone (lag test falls back to pinging the router).
+    [switch]$NoPhone,
     # Internal: used by the crash test to run a helper process. Do not pass by hand.
     [string]$ChildHold
 )
@@ -279,8 +279,8 @@ $script:HFix = [IntPtr]::Zero
 $script:Child = $null
 $wifi = @()
 $hostIp = $null
-$deckIp = $null
-$deckConnected = $false
+$phoneIp = $null
+$phoneConnected = $false
 
 $NS = 'Windows.Networking.NetworkOperators'
 
@@ -559,17 +559,17 @@ try {
         }
     }
 
-    # ------------------------------------------------------------ 4. Steam Deck
-    Section '4. Steam Deck'
+    # ------------------------------------------------------------ 4. Phone
+    Section '4. Phone'
 
-    if ($NoDeck) {
-        Record 'Steam Deck connects' 'SKIP' '-NoDeck' -Key Deck
+    if ($NoPhone) {
+        Record 'Phone connects' 'SKIP' '-NoPhone' -Key Phone
     } elseif (-not $script:StartedHotspot) {
-        Record 'Steam Deck connects' 'SKIP' 'hotspot did not start' -Key Deck
+        Record 'Phone connects' 'SKIP' 'hotspot did not start' -Key Phone
     } else {
         $ap = $mgr.GetCurrentAccessPointConfiguration()
         Write-Host ''
-        Write-Host '  Connect your Steam Deck to this Wi-Fi:' -ForegroundColor White
+        Write-Host '  Connect your phone to this Wi-Fi:' -ForegroundColor White
         Write-Host "    Name:     $($ap.Ssid)"
         Write-Host "    Password: $($ap.Passphrase)"
         Write-Host '  Waiting up to 3 minutes...'
@@ -580,33 +580,33 @@ try {
         }
 
         if ($mgr.ClientCount -gt 0) {
-            $deckConnected = $true
+            $phoneConnected = $true
             Start-Sleep -Seconds 3   # let DHCP finish so the client has an IP
             foreach ($c in $mgr.GetTetheringClients()) {
                 $names = @($c.HostNames | ForEach-Object { $_.DisplayName }) -join ', '
                 Record 'Connected device' 'INFO' "$($c.MacAddress) $names"
                 $ip = $c.HostNames | Where-Object { "$($_.Type)" -eq 'Ipv4' } | Select-Object -First 1
-                if ($ip -and -not $deckIp) { $deckIp = $ip.CanonicalName }
+                if ($ip -and -not $phoneIp) { $phoneIp = $ip.CanonicalName }
             }
-            if (-not $deckIp) {
-                $deckIp = (Get-NetNeighbor -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+            if (-not $phoneIp) {
+                $phoneIp = (Get-NetNeighbor -AddressFamily IPv4 -ErrorAction SilentlyContinue |
                     Where-Object { $_.IPAddress -like '192.168.137.*' -and $_.IPAddress -ne $hostIp -and
                                    $_.IPAddress -notlike '*.255' -and "$($_.State)" -ne 'Permanent' -and "$($_.State)" -ne 'Unreachable' } |
                     Select-Object -First 1).IPAddress
             }
-            Record 'Steam Deck connects' 'PASS' "IP: $(if ($deckIp) { $deckIp } else { 'unknown' })" -Key Deck
+            Record 'Phone connects' 'PASS' "IP: $(if ($phoneIp) { $phoneIp } else { 'unknown' })" -Key Phone
         } elseif ("$($mgr.TetheringOperationalState)" -ne 'On') {
-            Record 'Steam Deck connects' 'FAIL' 'Hotspot turned off while waiting' -Key Deck
+            Record 'Phone connects' 'FAIL' 'Hotspot turned off while waiting' -Key Phone
         } else {
-            Record 'Steam Deck connects' 'FAIL' 'No device connected within 3 minutes' -Key Deck
+            Record 'Phone connects' 'FAIL' 'No device connected within 3 minutes' -Key Phone
         }
     }
 
     # ------------------------------------------------------------ 5. Lag test
     Section '5. Latency: without vs. with the lag fix'
 
-    $pingTarget = $deckIp
-    $pingName = 'Steam Deck'
+    $pingTarget = $phoneIp
+    $pingName = 'phone'
     if (-not $pingTarget) {
         $gw = (Get-NetIPConfiguration -InterfaceAlias $wifi[0].Name -ErrorAction SilentlyContinue).IPv4DefaultGateway.NextHop
         if ($gw) { $pingTarget = $gw; $pingName = 'router (over laptop Wi-Fi)' }
@@ -615,7 +615,7 @@ try {
     if ($SkipLagTest) {
         Record 'Lag spikes reduced' 'SKIP' '-SkipLagTest' -Key Lag
     } elseif (-not $pingTarget) {
-        Record 'Lag spikes reduced' 'SKIP' 'nothing to ping (no Deck IP, no Wi-Fi gateway)' -Key Lag
+        Record 'Lag spikes reduced' 'SKIP' 'nothing to ping (no phone IP, no Wi-Fi gateway)' -Key Lag
     } elseif (-not $script:Iface) {
         Record 'Lag spikes reduced' 'SKIP' 'no connected Wi-Fi interface to apply the fix to' -Key Lag
     } else {
@@ -644,15 +644,15 @@ try {
     # ------------------------------------------------------------ 6. Moonlight
     Section '6. Moonlight stream (manual)'
 
-    if (-not $deckConnected) {
-        Record 'Moonlight streams over hotspot' 'SKIP' 'no Steam Deck connected' -Key Moonlight
+    if (-not $phoneConnected) {
+        Record 'Moonlight streams over hotspot' 'SKIP' 'no phone connected' -Key Moonlight
     } else {
         $fixState = if ($script:HFix -ne [IntPtr]::Zero) { 'ON' } else { 'OFF' }
         Write-Host ''
         Write-Host "  Test a real stream now (lag fix is $fixState):" -ForegroundColor White
         Write-Host '    1. Make sure Sunshine is running on this PC.'
         Write-Host '    2. First time? Run Firewall-Setup.cmd (asks for admin once).'
-        Write-Host "    3. On the Steam Deck: Moonlight -> Add host manually -> $hostIp"
+        Write-Host "    3. On the phone: Moonlight -> + (Add PC) -> $hostIp"
         Write-Host '    4. Pair and play for a minute or two.'
         $ans = Read-Host 'Did it stream? [y = yes, n = no, s = skip]'
         switch -Regex ($ans) {
@@ -711,7 +711,7 @@ finally {
         WlanSet   = 'Lag fix works without admin'
         Revert    = 'Lag fix undone when app closes'
         Crash     = 'Lag fix undone when app crashes'
-        Deck      = 'Steam Deck connects'
+        Phone     = 'Phone connects'
         Lag       = 'Lag spikes reduced'
         Moonlight = 'Moonlight streams over hotspot'
     }

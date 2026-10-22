@@ -1,10 +1,10 @@
 # OphiStreamer — Build Plan
 
-A Windows tray utility that turns a laptop's Wi-Fi card into a low-latency, direct link for game streaming (Sunshine/Moonlight → Steam Deck) with one click.
+A Windows tray utility that turns a laptop's Wi-Fi card into a low-latency, direct link for game streaming (Sunshine on the PC → Moonlight on an Android phone) with one click.
 
 Works on any Windows 10 (2004+) / Windows 11 PC whose Wi-Fi card supports Mobile Hotspot. Not tied to any specific hardware.
 
-**First target laptop:** Acer Nitro 5 AN515-52, Windows 11 (usually an Intel Wireless-AC 9560).
+**First target setup:** Acer Nitro 5 AN515-52, Windows 11 (usually an Intel Wireless-AC 9560) → **Honor X7d** (Android) running Moonlight, connected directly to the laptop's hotspot.
 
 **Intel 5 GHz rule** (Intel support article 000029083): Intel cards only allow a 5 GHz hotspot while the PC is *also connected to a 5 GHz Wi-Fi access point*. Ethernet alone is not enough. So on Intel laptops the normal setup is: laptop on the router's 5 GHz Wi-Fi → hotspot shares that radio on 5 GHz → the lag fix (scan off) matters most here. The app must detect this case and tell the user "Connect to your 5 GHz Wi-Fi first".
 
@@ -33,7 +33,7 @@ Reference / prior art:
 
 ### Must-have
 1. **One-click toggle** — hotspot ON + streaming mode ON (scan off).
-2. **Automatic restore** — everything back to normal on toggle-off, Deck gone, sleep, logoff, exit, crash.
+2. **Automatic restore** — everything back to normal on toggle-off, phone gone, sleep, logoff, exit, crash.
 3. **Firewall fix** — Sunshine allowed on the hotspot network (created by installer; "Repair" button re-runs it).
 4. **Tray icon with two states** — ⚪ gray = off, 🟢 green = Gaming Mode active.
 5. **Connection info** — hotspot name/password + "Add this PC in Moonlight: `192.168.137.1`" with copy buttons.
@@ -41,7 +41,11 @@ Reference / prior art:
 ### Should-have (never blocks the toggle)
 - **5 GHz band** — try 5 GHz; if unsupported/rejected fall back to Auto and show "Running on 2.4 GHz".
 - **Band warning** — if the laptop's own internet is 2.4 GHz Wi-Fi, warn that 5 GHz hotspot isn't possible on single-radio cards.
-- **Device names** — "Steam Deck connected" from the hotspot client list.
+- **Device names** — "HONOR X7d connected" from the hotspot client list.
+- **Pre-flight check** before enabling — on charger? laptop on 5 GHz Wi-Fi? router on a non-DFS channel? big downloads running (they share the radio)? Warn, never block.
+- **Wi-Fi card at Maximum Performance** while Gaming Mode is on (power-saving mode), restored on exit.
+- **Channel + band in the tray tooltip.**
+- **Setup checklist** in the window: phone battery optimisation off for Moonlight, Wi-Fi+ off, recommended Moonlight settings.
 
 ### Later (v1.1+)
 - Wi-Fi adapter dropdown (v1 auto-picks)
@@ -71,7 +75,7 @@ Reference / prior art:
 4. Icon → gray.
 
 ### Automatic restore triggers
-- Steam Deck (last client) disconnected for **2 minutes** (grace period so a short Deck sleep doesn't end the session).
+- Phone (last client) disconnected for **2 minutes** (grace period so a screen-off or short Wi-Fi drop doesn't end the session).
 - PC suspend (`SystemEvents.PowerModeChanged`), logoff/shutdown (`SessionEnding`).
 - App exit.
 - Hotspot stopped by Windows or user outside the app → detect on poll, run restore.
@@ -119,7 +123,7 @@ OphiStreamer/
 
 ## 6. Build order (each step tested before the next)
 
-0. **Hardware proof (on a laptop with Wi-Fi + Steam Deck).** PowerShell/C# console test:
+0. **Hardware proof (on the Acer + the Honor X7d).** PowerShell/C# console test:
    - hotspot starts on 5 GHz without admin
    - `WlanSetInterface` works without admin
    - **settings really revert when the process is killed** (key assumption — not stated in Microsoft docs)
@@ -133,8 +137,8 @@ OphiStreamer/
 
 ## 7. Definition of done
 
-On a Wi-Fi laptop + Steam Deck:
+On the Acer + Honor X7d:
 - Toggle on → stream → toggle off → normal Wi-Fi works. **10× in a row.**
-- Deck asleep > 2 min → laptop restores itself.
+- Phone off the hotspot > 2 min → laptop restores itself.
 - App killed in Task Manager mid-session → scan settings reverted by Windows; next launch cleans up hotspot.
 - Fresh install on a second PC: no UAC prompt after install, stream works first try.
