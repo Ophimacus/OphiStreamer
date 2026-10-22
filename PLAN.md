@@ -99,6 +99,48 @@ Patterns: uppercase letter-spaced section headers; settings-style rows (label le
 
 ---
 
+## 2c-bis. Connection modes (decided 2026-10-22)
+
+**Mode A — Phone hotspot (primary).** Honor X7d runs a **5 GHz** hotspot (Settings → Mobile network → Personal hotspot → More → AP band → 5 GHz; turn the hotspot off before changing it). The Acer joins it as a normal 5 GHz client. No Intel restriction, no router, works anywhere. Daily flow: tap the phone's hotspot tile → Windows auto-joins → OphiStreamer **detects the phone's network and enables Gaming mode automatically** (zero clicks on PC; one-click manual toggle still available) → open Moonlight.
+
+**Mode B — Laptop hotspot with 5 GHz trigger (fallback).** User confirmed: after the Acer briefly connects to a 5 GHz network (the "trigger", e.g. the phone hotspot), the Intel card allows the laptop hotspot on 5 GHz. Kept for other phones/tablets and as a fallback; the app can automate the trigger (connect to the saved 5 GHz profile → start hotspot).
+
+---
+
+## 2c-ter. Stability engineering (Mode A)
+
+Goal: no drops, no spikes. Layers, in order of impact:
+
+**1. Laptop Wi-Fi client (the laptop is now the one that scans/roams)**
+- Lag fix stays core: `WlanSetInterface` background scan **off** + media streaming mode **on**, re-applied every ~10 s (Microsoft's own WlanScan docs: scanning makes it harder to send/receive and increases latency).
+- **Pin the phone network:** for the phone hotspot profile set `netsh wlan set profileparameter name="<phone SSID>" connectionmode=auto autoswitch=No cost=Fixed` → auto-joins, never hops to another network mid-game, and Windows treats it as metered (no Windows Update / OneDrive eating the link). Done by the installer/first-run wizard (admin once).
+- **Fast reconnect watchdog:** if the link drops, reconnect to the phone profile immediately via `WlanConnect` (don't wait for Windows), then re-apply the lag fix. Log every drop with RSSI/tx rate so calibration can show it.
+- Wi-Fi power plan **Maximum Performance** while active; restore on exit.
+- Intel adapter advanced settings (one-time, admin, shown as a checklist with "Apply" in the installer): Roaming Aggressiveness **Lowest**, MIMO Power Save **No SMPS**, U-APSD **Disabled**, Packet Coalescing **Disabled**, Preferred Band **5 GHz**. (Dell/Intel support list these options; values chosen for a fixed, single network.)
+- Optional toggle "Pause location services while streaming": user reports link periodic jitter to Wi-Fi-based location scans (anecdotal, so it's an A/B option measured by calibration, not a default).
+
+**2. Phone hotspot**
+- 5 GHz AP band; turn off any "auto-turn-off hotspot when idle" option; **mobile data off** (no internet needed, no background downloads over the link).
+- A SoftAP can sleep its radio when traffic is idle (DozyAP research), which adds latency on wake. During a stream traffic is continuous, so this mostly hits the first seconds; the PC app sends a tiny keep-alive (1 packet / 100 ms) to the phone while Gaming mode is on.
+- Heat: hotspot + decoding on a Snapdragon 685 → keep 720p60 HEVC ~10 Mbps, brightness moderate; charging adds heat, so test both (calibration records it).
+
+**3. Sunshine (the stream itself)**
+- `fec_percentage` **20 → 30** on Wi-Fi (more packets survive loss; costs ~10 % extra bandwidth; calibration can tune 20–40).
+- `nvenc_preset` **1** (fastest, default) and `nvenc_twopass` **quarter_res** (default; disabling it can cause bitrate overshoot and packet loss per Sunshine docs).
+- `max_bitrate` = calibrated cap, so a wrong Moonlight setting can't overload the link.
+- Applied via Sunshine's local web API once the user enters their Sunshine login (stored with DPAPI).
+
+**4. Moonlight on the phone**
+- 1280×720, 60 fps, HEVC, ~10 Mbps, frame pacing "lowest latency", performance overlay on during setup.
+
+**5. Self-checking**
+- Calibration (§2e) runs Mode A A/B tests: lag fix on/off, location on/off, charger on/off, FEC 20/30; keeps whatever measures best on this hardware.
+- Live link chip in the window/tray: green/amber/red from 1 s ping + loss, with "why" text.
+
+**Most-stable option noted for later:** USB tethering (cable, ~1 ms, zero Wi-Fi interference) — not usable while the GameSir occupies the phone's USB-C port; only relevant with a Bluetooth controller.
+
+---
+
 ## 2d. One-click experience (the promise)
 
 **Install (once, on the Acer):** run `OphiStreamerSetup.exe` → **Install** → approve **one** Windows admin prompt. The installer, silently:
