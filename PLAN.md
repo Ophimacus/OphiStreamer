@@ -166,6 +166,26 @@ The standalone Link Check app (`android/` in this repo) stays until stage 2 repl
 
 ---
 
+## 2c-diff. Where Artemis is weak, and what OphiStreamer does instead (researched 2026-10-23)
+
+Source: Artemis (`ClassicOldSong/moonlight-android`) has ~180 open issues (87 bug, 85 enhancement), one maintainer; Apollo has ~300 open issues.
+
+| Artemis/Apollo weakness (evidence) | OphiStreamer answer |
+|---|---|
+| **No auto-reconnect**: stream ends on any Wi-Fi blip; requested in Artemis #159, #356 and Moonlight #1412, still open. PC sometimes unreachable after a session (#511). | **Auto-resume**: keep the session target, wait for the link, reconnect with a "Reconnecting..." screen. |
+| **Pairing fragility**: Artemis 20.2.6 can crash Apollo when pairing with a PIN (#420); host configs overwritten across IPs (#564); our own "unique ID" error. | **PIN-less pairing + one-tap Repair** via the OphiStreamer Windows app (submits PIN to Apollo's API, restarts/unpairs on request). |
+| **Device-specific decode/frame-pacing problems**: rendering fps below incoming fps, stutter, MediaTek decoder latency, Samsung pacing (#386, #416, #246, #206, #82, #113, #415). Users must try settings by hand. | **Auto-tune from real sessions**: measure incoming vs rendered fps and decode time per session; switch frame-pacing mode / fps / bitrate automatically next time. |
+| **Settings sprawl**: requests for submenus and moving the overlay toggle (#199, #464). | **Opinionated defaults + Quick menu**: calibration sets everything; Quick menu holds the 5 settings that matter; full settings stay under "Advanced". |
+| **No network-aware profiles**: asked for profile switching by SSID/connection (#551). | **Link-aware**: knows phone-hotspot vs home Wi-Fi, picks the calibrated profile for that link automatically. |
+| **Controller mapping quirks**: back button mapping (#142, #344), rumble on some devices (#501), multiple controllers (#169). | **Controller check + test screen** (live input already in Link Check), per-controller fixes surfaced with one tap. |
+| **Apollo virtual display failures**: display not created / no name / no resolution (Apollo #1532, #1531, #1565), host disappearing (#1517), freezes after quitting (#1252). | **PC-side health check** in the Windows app: detects a failed virtual display or stuck Apollo, repairs or restarts it, and tells the phone why. |
+| **Background battery drain** (#84). | Phone app does nothing in the background; Gaming-mode keep-alive only while streaming. |
+| **No heat awareness** on phones that host the hotspot and decode. | **Thermal/battery guard** (Android thermal status API) with a 60 fps / lower bitrate suggestion. |
+
+Positioning: Artemis is a powerful client for experts; **OphiStreamer is a complete, self-healing PC-to-phone system**: it owns the PC, the phone and the link between them, so it can fix problems a client alone can only report.
+
+---
+
 ## 2c-quater. Milestone 0 results (Acer + Honor X7d, 2026-10-23, phone-hotspot mode)
 
 **Confirmed on real hardware (the core design holds):**
