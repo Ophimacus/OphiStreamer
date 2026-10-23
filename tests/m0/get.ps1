@@ -18,4 +18,4 @@ Copy-Item -Path (Join-Path $unpacked 'OphiStreamer-main\tests\m0\*') -Destinatio
 Remove-Item -Path $zip, $unpacked -Recurse -Force
 
 Write-Host "Test kit ready in $dest" -ForegroundColor Green
-& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $dest 'm0-start.ps1')
+Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-File', "`"$(Join-Path $dest 'm0-launcher.ps1')`"")

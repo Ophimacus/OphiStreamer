@@ -1,5 +1,3 @@
 @echo off
-rem OphiStreamer Milestone 0 - one click: join the phone hotspot, set up, run the test.
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0m0-start.ps1" %*
-echo.
-pause
+rem OphiStreamer Milestone 0 - opens the test launcher window.
+start "" powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0m0-launcher.ps1"

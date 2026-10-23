@@ -35,9 +35,11 @@ Two modes (see PLAN.md):
    ```
    irm https://raw.githubusercontent.com/Ophimacus/OphiStreamer/main/tests/m0/get.ps1 | iex
    ```
-   It downloads the latest kit to `%USERPROFILE%\OphiStreamer-m0` and starts it. Next time, just double-click **`Start-Test.cmd`** in that folder.
-3. Answer the prompts: hotspot name and password (first time only), one admin prompt (first time only), then the test runs by itself.
-4. Phone: open **Link Check** → **Run link test** → **Copy report**. Send both reports back.
+   It downloads the latest kit to `%USERPROFILE%\OphiStreamer-m0` and opens the **Test Kit** window. Next time, just double-click **`Start-Test.cmd`** in that folder (`Start-Test-Console.cmd` is the text version).
+3. In the window: hotspot name and password (first time only) → **START TEST** → approve one admin prompt (first time only). Steps turn green/amber/red live; when asked, stream with Moonlight and answer with the buttons.
+4. Phone: open **Link Check** → **Run link test** → **Copy report**. Send back the `m0-report-*.txt`, the `m0-link-*.csv` and the Link Check report.
+
+**Connection log:** from the moment the phone link is up, the test records the Wi-Fi link every second to `m0-link-*.csv` (state, SSID, band, channel, signal, receive/transmit rate, ping to the phone). The report summarises it as "Connection stayed up": any disconnect or channel change is a FAIL, lost pings a WARN.
 
 If Windows hides the Wi-Fi name (Windows 11 24H2+), turn on Settings → Privacy & security → Location → **Let desktop apps access your location**.
 

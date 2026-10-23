@@ -41,6 +41,8 @@ param(
     [string]$Mode = 'PhoneHotspot',
     # Skip the "press Enter once connected" prompt (m0-start.ps1 already joined the hotspot).
     [switch]$AssumeConnected,
+    # Used by the launcher window: questions go out as "@@ASK" lines, answers come back as files here.
+    [string]$GuiAnswerDir,
     # Seconds per latency phase. Windows scans roughly once a minute, so keep this >= 90.
     [int]$LagSeconds = 90,
     [switch]$SkipLagTest,
@@ -318,6 +320,67 @@ $wifi = @()
 $hostIp = $null
 $phoneIp = $null
 $phoneConnected = $false
+$script:LinkLog = $null      # { Path, PS, Sync } while the connection log is running
+
+# Logs the Wi-Fi link once a second to a CSV next to the report: state, band, signal, rates, ping.
+$linkLogger = {
+    param($path, $target, $sync)
+    'time,state,ssid,band,channel,signal,rx_mbps,tx_mbps,ping_ms' | Set-Content -Path $path -Encoding UTF8
+    $ping = New-Object System.Net.NetworkInformation.Ping
+    while (-not $sync.Stop) {
+        $info = @{}
+        foreach ($l in (netsh wlan show interfaces)) {
+            if ($l -match '^\s*([^:]+?)\s*:\s*(.*)$' -and -not $info.ContainsKey($Matches[1])) { $info[$Matches[1]] = $Matches[2].Trim() }
+        }
+        $ms = ''
+        if ($target) {
+            try {
+                $r = $ping.Send($target, 500)
+                $ms = if ($r.Status -eq 'Success') { $r.RoundtripTime } else { 'lost' }
+            } catch { $ms = 'lost' }
+        }
+        $row = '{0:HH:mm:ss.fff},{1},"{2}",{3},{4},{5},{6},{7},{8}' -f (Get-Date), $info['State'], $info['SSID'],
+            $info['Band'], $info['Channel'], $info['Signal'], $info['Receive rate (Mbps)'], $info['Transmit rate (Mbps)'], $ms
+        Add-Content -Path $path -Value $row
+        Start-Sleep -Milliseconds 1000
+    }
+}
+
+function Start-LinkLog([string]$Target) {
+    $dir = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
+    $path = Join-Path $dir ("m0-link-{0}-{1:yyyyMMdd-HHmmss}.csv" -f $env:COMPUTERNAME, (Get-Date))
+    $sync = [hashtable]::Synchronized(@{ Stop = $false })
+    $ps = [powershell]::Create()
+    $ps.Runspace = [runspacefactory]::CreateRunspace()
+    $ps.Runspace.Open()
+    [void]$ps.AddScript($linkLogger).AddArgument($path).AddArgument($Target).AddArgument($sync)
+    $null = $ps.BeginInvoke()
+    $script:LinkLog = @{ Path = $path; PS = $ps; Sync = $sync }
+    Record 'Connection log' 'INFO' "recording to $(Split-Path $path -Leaf)"
+}
+
+function Stop-LinkLog {
+    if (-not $script:LinkLog) { return }
+    $script:LinkLog.Sync.Stop = $true
+    Start-Sleep -Milliseconds 1200
+    try { $script:LinkLog.PS.Stop(); $script:LinkLog.PS.Dispose() } catch { }
+    $rows = @(Import-Csv $script:LinkLog.Path)
+    $script:LinkLog = $null
+    if ($rows.Count -eq 0) { return }
+
+    $down = @($rows | Where-Object { $_.state -ne 'connected' }).Count
+    $lost = @($rows | Where-Object { $_.ping_ms -eq 'lost' }).Count
+    $pings = @($rows | Where-Object { $_.ping_ms -match '^\d+$' } | ForEach-Object { [int]$_.ping_ms })
+    $signals = @($rows | ForEach-Object { $_.signal -replace '\D', '' } | Where-Object { $_ } | ForEach-Object { [int]$_ })
+    $channels = @($rows | Where-Object { $_.channel } | Select-Object -ExpandProperty channel -Unique)
+    $detail = "{0} s logged, disconnected {1} s, lost pings {2}, max ping {3} ms, signal {4}-{5}%, channel {6}" -f $rows.Count, $down, $lost,
+        $(if ($pings) { ($pings | Measure-Object -Maximum).Maximum } else { '-' }),
+        $(if ($signals) { ($signals | Measure-Object -Minimum).Minimum } else { '-' }),
+        $(if ($signals) { ($signals | Measure-Object -Maximum).Maximum } else { '-' }),
+        ($channels -join '/')
+    $level = if ($down -gt 0 -or $channels.Count -gt 1) { 'FAIL' } elseif ($lost -gt 0) { 'WARN' } else { 'PASS' }
+    Record 'Connection stayed up' $level $detail -Key Stable
+}
 
 $NS = 'Windows.Networking.NetworkOperators'
 
@@ -726,6 +789,8 @@ try {
         }
     }
 
+    if ($phoneIp) { Start-LinkLog $phoneIp }
+
     # ------------------------------------------------------------ 5. Lag test
     Section '5. Latency: without vs. with the lag fix'
 
@@ -778,13 +843,22 @@ try {
         Write-Host '    2. First time? Run Firewall-Setup.cmd (asks for admin once).'
         Write-Host "    3. On the phone: Moonlight -> + (Add PC) -> $hostIp"
         Write-Host '    4. Pair and play for a minute or two.'
-        $ans = Read-Host 'Did it stream? [y = yes, n = no, s = skip]'
+        if ($GuiAnswerDir) {
+            # The launcher window shows its own question and writes "y|notes" to this file.
+            $answerFile = Join-Path $GuiAnswerDir 'moonlight.txt'
+            Remove-Item $answerFile -ErrorAction SilentlyContinue
+            Write-Host "@@ASK moonlight|$hostIp|$fixState"
+            while (-not (Test-Path $answerFile)) { Start-Sleep -Milliseconds 300 }
+            $ans, $notes = (Get-Content $answerFile -Raw).Trim() -split '\|', 2
+        } else {
+            $ans = Read-Host 'Did it stream? [y = yes, n = no, s = skip]'
+            $notes = Read-Host 'Notes (stutter, quality, errors)? Press Enter to skip'
+        }
         switch -Regex ($ans) {
             '^[yY]' { Record 'Moonlight streams over hotspot' 'PASS' -Key Moonlight }
             '^[nN]' { Record 'Moonlight streams over hotspot' 'FAIL' 'see notes' -Key Moonlight }
             default { Record 'Moonlight streams over hotspot' 'SKIP' -Key Moonlight }
         }
-        $notes = Read-Host 'Notes (stutter, quality, errors)? Press Enter to skip'
         if ($notes) { Record 'Your notes' 'INFO' $notes }
     }
 }
@@ -793,6 +867,8 @@ catch {
 }
 finally {
     Section 'Cleanup'
+
+    try { Stop-LinkLog } catch { Record 'Connection log' 'WARN' (Get-InnerMessage $_) }
 
     try { if ($script:Child -and -not $script:Child.HasExited) { Stop-Process -Id $script:Child.Id -Force } } catch { }
 
@@ -839,6 +915,7 @@ finally {
         Phone     = $(if ($phoneMode) { 'Phone answers on the hotspot' } else { 'Phone connects' })
         Lag       = 'Lag spikes reduced'
         Moonlight = 'Moonlight streams over hotspot'
+        Stable    = 'Connection stayed up'
     }
     $summary = foreach ($k in $checks.Keys) {
         $r = $script:Results | Where-Object { $_.Key -eq $k } | Select-Object -Last 1

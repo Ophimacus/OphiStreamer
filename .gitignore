@@ -1,5 +1,6 @@
 # Test reports (may contain network details)
 tests/m0/m0-report-*.txt
+tests/m0/m0-link-*.csv
 
 # Android / Gradle
 android/.gradle/
