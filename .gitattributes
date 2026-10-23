@@ -1,0 +1,3 @@
+# Windows scripts need CRLF, including in GitHub's zip download used by get.ps1.
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
