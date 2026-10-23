@@ -5,16 +5,25 @@
 
 .DESCRIPTION
     Run on a laptop with Wi-Fi (with your Android phone nearby) from a NORMAL,
-    non-admin PowerShell window. It checks the assumptions PLAN.md depends on:
+    non-admin PowerShell window. It checks the assumptions PLAN.md depends on.
 
+    -Mode PhoneHotspot (default, PLAN Mode A): the phone runs a 5 GHz hotspot and
+    the laptop joins it.
+      Hotspot    Laptop joined the phone's hotspot
+      Band       The link is on 5 GHz (and not a radar/DFS channel)
+      Phone      The phone answers on the hotspot
+
+    -Mode LaptopHotspot (PLAN Mode B): the laptop runs the hotspot.
       Hotspot    Mobile Hotspot starts without admin
       Band       Hotspot can be set to 5 GHz
+      Phone      The phone connects to the hotspot
+
+    Both modes:
       WlanSet    WlanSetInterface (background scan off, streaming mode on) works without admin
       Revert     Those settings are undone when the app closes its handle
       Crash      Those settings are undone when the app is killed
-      Phone      The phone connects to the hotspot
-      Lag        Latency spikes are lower with the fix (pings the phone or the router)
-      Moonlight  Moonlight streams over the hotspot (you answer y/n)
+      Lag        Latency spikes are lower with the fix (pings the phone)
+      Moonlight  Moonlight streams (you answer y/n)
 
     Everything it changes is put back at the end. A report (without your hotspot
     password) is saved next to this script.
@@ -23,10 +32,13 @@
     powershell -NoProfile -ExecutionPolicy Bypass -File .\m0-hardware-proof.ps1
 
 .EXAMPLE
-    .\m0-hardware-proof.ps1 -NoPhone -LagSeconds 120
+    .\m0-hardware-proof.ps1 -Mode LaptopHotspot -LagSeconds 120
 #>
 [CmdletBinding()]
 param(
+    # PhoneHotspot = phone hosts, laptop joins (default). LaptopHotspot = laptop hosts.
+    [ValidateSet('PhoneHotspot', 'LaptopHotspot')]
+    [string]$Mode = 'PhoneHotspot',
     # Seconds per latency phase. Windows scans roughly once a minute, so keep this >= 90.
     [int]$LagSeconds = 90,
     [switch]$SkipLagTest,
@@ -259,6 +271,29 @@ function Measure-Latency([string]$Target, [int]$Seconds) {
     $stats
 }
 
+function Get-WlanLink([string]$Alias) {
+    $info = @{}
+    foreach ($line in (netsh wlan show interfaces)) {
+        if ($line -match '^\s*([^:]+?)\s*:\s*(.*)$' -and -not $info.ContainsKey($Matches[1])) {
+            $info[$Matches[1]] = $Matches[2].Trim()
+        }
+    }
+    $ip = Get-NetIPConfiguration -InterfaceAlias $Alias -ErrorAction SilentlyContinue
+    [pscustomobject]@{
+        Connected = $info['State'] -eq 'connected'
+        Ssid      = $info['SSID']
+        Profile   = $info['Profile']
+        Band      = $info['Band']
+        Channel   = $info['Channel']
+        RadioType = $info['Radio type']
+        Signal    = $info['Signal']
+        RxRate    = $info['Receive rate (Mbps)']
+        TxRate    = $info['Transmit rate (Mbps)']
+        Gateway   = $ip.IPv4DefaultGateway.NextHop
+        LaptopIp  = ($ip.IPv4Address | Select-Object -First 1).IPAddress
+    }
+}
+
 function Format-Latency($s) {
     "avg $($s.Avg) ms, p99 $($s.P99) ms, max $($s.Max) ms, spikes>=50ms: $($s.Spikes), lost: $($s.Lost)/$($s.Sent)"
 }
@@ -330,21 +365,24 @@ try {
     $on24 = ($bandLine -match '2\.4') -or ($chanLine -match ':\s*([1-9]|1[0-4])\s*$')
     $stateLine = $link | Where-Object { $_ -match '^\s*State\s*:' } | Select-Object -First 1
     $wifiConnected = $stateLine -match ':\s*connected\s*$'
-    if ($on24) {
-        Record 'Laptop Wi-Fi band' 'WARN' 'Laptop is on 2.4 GHz Wi-Fi. Single-radio cards may force the hotspot onto 2.4 GHz too.'
-    }
-    # Intel rule (support article 000029083): a 5 GHz hotspot is only allowed while the
-    # PC is also connected to a 5 GHz Wi-Fi access point. Ethernet alone is not enough.
-    if (($wifi | Where-Object { $_.InterfaceDescription -match 'Intel' }) -and (-not $wifiConnected -or $on24)) {
-        Record 'Intel 5 GHz rule' 'WARN' 'Intel cards only allow a 5 GHz hotspot while the laptop is connected to a 5 GHz Wi-Fi network. Connect to your router''s 5 GHz Wi-Fi first.'
-    }
+    Record 'Test mode' 'INFO' $Mode
+    if ($Mode -eq 'LaptopHotspot') {
+        if ($on24) {
+            Record 'Laptop Wi-Fi band' 'WARN' 'Laptop is on 2.4 GHz Wi-Fi. Single-radio cards may force the hotspot onto 2.4 GHz too.'
+        }
+        # Intel rule (support article 000029083): a 5 GHz hotspot is only allowed while the
+        # PC is also connected to a 5 GHz Wi-Fi access point. Ethernet alone is not enough.
+        if (($wifi | Where-Object { $_.InterfaceDescription -match 'Intel' }) -and (-not $wifiConnected -or $on24)) {
+            Record 'Intel 5 GHz rule' 'WARN' 'Intel cards only allow a 5 GHz hotspot after connecting to a 5 GHz network. Trigger it first: join a 5 GHz Wi-Fi (e.g. the phone hotspot) for a moment.'
+        }
 
-    $peerless = $null
-    try { $peerless = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\icssvc\Settings' -ErrorAction Stop).PeerlessTimeoutEnabled } catch { }
-    if ($null -eq $peerless) {
-        Record 'Hotspot idle timeout' 'INFO' 'PeerlessTimeoutEnabled not set (Windows default: hotspot turns off ~5 min after last device leaves)'
-    } else {
-        Record 'Hotspot idle timeout' 'INFO' "PeerlessTimeoutEnabled = $peerless"
+        $peerless = $null
+        try { $peerless = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\icssvc\Settings' -ErrorAction Stop).PeerlessTimeoutEnabled } catch { }
+        if ($null -eq $peerless) {
+            Record 'Hotspot idle timeout' 'INFO' 'PeerlessTimeoutEnabled not set (Windows default: hotspot turns off ~5 min after last device leaves)'
+        } else {
+            Record 'Hotspot idle timeout' 'INFO' "PeerlessTimeoutEnabled = $peerless"
+        }
     }
 
     $battery = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -367,125 +405,187 @@ try {
         Record 'Controller driver (ViGEmBus)' 'WARN' 'Not installed: the phone controller will not reach games. Re-run the Sunshine installer and tick ViGEmBus.'
     }
 
-    # ------------------------------------------------------------ 2. Hotspot
-    Section '2. Mobile Hotspot (no admin)'
+    if ($Mode -eq 'LaptopHotspot') {
+        # ------------------------------------------------------------ 2. Hotspot
+        Section '2. Mobile Hotspot (no admin)'
 
-    try {
-        $null = [Windows.Networking.Connectivity.NetworkInformation, Windows.Networking.Connectivity, ContentType = WindowsRuntime]
-        $null = [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager, Windows.Networking.NetworkOperators, ContentType = WindowsRuntime]
-        $null = [Windows.Networking.NetworkOperators.NetworkOperatorTetheringOperationResult, Windows.Networking.NetworkOperators, ContentType = WindowsRuntime]
-    } catch {
-        Record 'Load Windows hotspot API' 'FAIL' (Get-InnerMessage $_) -Key Hotspot
-        return
-    }
-    $bandTypeLoaded = $true
-    try { $null = [Windows.Networking.NetworkOperators.TetheringWiFiBand, Windows.Networking.NetworkOperators, ContentType = WindowsRuntime] }
-    catch { $bandTypeLoaded = $false }
-    $resultType = "$NS.NetworkOperatorTetheringOperationResult" -as [type]
-
-    $connProfile = [Windows.Networking.Connectivity.NetworkInformation]::GetInternetConnectionProfile()
-    if (-not $connProfile) {
-        $connProfile = [Windows.Networking.Connectivity.NetworkInformation]::GetConnectionProfiles() |
-            Where-Object { "$($_.GetNetworkConnectivityLevel())" -ne 'None' } | Select-Object -First 1
-    }
-    if (-not $connProfile) {
-        Record 'Connection to share' 'FAIL' 'No connected network. Connect the laptop to Wi-Fi or Ethernet first.' -Key Hotspot
-        return
-    }
-    Record 'Connection to share' 'INFO' "$($connProfile.ProfileName) (connectivity: $($connProfile.GetNetworkConnectivityLevel()))"
-
-    $cap = [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager]::GetTetheringCapabilityFromConnectionProfile($connProfile)
-    if ("$cap" -ne 'Enabled') {
-        Record 'Hotspot capability' 'FAIL' "Windows says: $cap" -Key Hotspot
-        return
-    }
-    Record 'Hotspot capability' 'PASS'
-
-    $script:Mgr = [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager]::CreateFromConnectionProfile($connProfile)
-    $mgr = $script:Mgr
-
-    if ("$($mgr.TetheringOperationalState)" -eq 'On') {
-        $script:RestoreOn = $true
-        Record 'Hotspot was already on' 'INFO' 'Stopping it to apply test settings; it will be turned back on at the end'
-        $null = Await-Op ($mgr.StopTetheringAsync()) $resultType
-    }
-
-    $cfg = $mgr.GetCurrentAccessPointConfiguration()
-    Record 'Hotspot name' 'INFO' $cfg.Ssid
-
-    $bandApi = $bandTypeLoaded
-    if ($bandApi) { try { $script:OrigBand = $cfg.Band } catch { $bandApi = $false } }
-    if (-not $bandApi -or $null -eq $script:OrigBand) {
-        Record '5 GHz band' 'FAIL' 'This Windows build has no band setting in the hotspot API' -Key Band
-    } else {
-        Record 'Band setting before test' 'INFO' "$($script:OrigBand)"
-        $support = @{}
-        foreach ($b in 'TwoPointFourGigahertz', 'FiveGigahertz', 'SixGigahertz') {
-            try { $support[$b] = $cfg.IsBandSupported([Windows.Networking.NetworkOperators.TetheringWiFiBand]$b) }
-            catch { $support[$b] = 'unknown' }
-            Record "Band supported: $b" 'INFO' "$($support[$b])"
+        try {
+            $null = [Windows.Networking.Connectivity.NetworkInformation, Windows.Networking.Connectivity, ContentType = WindowsRuntime]
+            $null = [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager, Windows.Networking.NetworkOperators, ContentType = WindowsRuntime]
+            $null = [Windows.Networking.NetworkOperators.NetworkOperatorTetheringOperationResult, Windows.Networking.NetworkOperators, ContentType = WindowsRuntime]
+        } catch {
+            Record 'Load Windows hotspot API' 'FAIL' (Get-InnerMessage $_) -Key Hotspot
+            return
         }
-        if ($support['FiveGigahertz'] -eq $false) {
-            Record '5 GHz band' 'FAIL' 'Adapter/driver reports 5 GHz hotspot is not supported' -Key Band
+        $bandTypeLoaded = $true
+        try { $null = [Windows.Networking.NetworkOperators.TetheringWiFiBand, Windows.Networking.NetworkOperators, ContentType = WindowsRuntime] }
+        catch { $bandTypeLoaded = $false }
+        $resultType = "$NS.NetworkOperatorTetheringOperationResult" -as [type]
+
+        $connProfile = [Windows.Networking.Connectivity.NetworkInformation]::GetInternetConnectionProfile()
+        if (-not $connProfile) {
+            $connProfile = [Windows.Networking.Connectivity.NetworkInformation]::GetConnectionProfiles() |
+                Where-Object { "$($_.GetNetworkConnectivityLevel())" -ne 'None' } | Select-Object -First 1
+        }
+        if (-not $connProfile) {
+            Record 'Connection to share' 'FAIL' 'No connected network. Connect the laptop to Wi-Fi or Ethernet first.' -Key Hotspot
+            return
+        }
+        Record 'Connection to share' 'INFO' "$($connProfile.ProfileName) (connectivity: $($connProfile.GetNetworkConnectivityLevel()))"
+
+        $cap = [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager]::GetTetheringCapabilityFromConnectionProfile($connProfile)
+        if ("$cap" -ne 'Enabled') {
+            Record 'Hotspot capability' 'FAIL' "Windows says: $cap" -Key Hotspot
+            return
+        }
+        Record 'Hotspot capability' 'PASS'
+
+        $script:Mgr = [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager]::CreateFromConnectionProfile($connProfile)
+        $mgr = $script:Mgr
+
+        if ("$($mgr.TetheringOperationalState)" -eq 'On') {
+            $script:RestoreOn = $true
+            Record 'Hotspot was already on' 'INFO' 'Stopping it to apply test settings; it will be turned back on at the end'
+            $null = Await-Op ($mgr.StopTetheringAsync()) $resultType
+        }
+
+        $cfg = $mgr.GetCurrentAccessPointConfiguration()
+        Record 'Hotspot name' 'INFO' $cfg.Ssid
+
+        $bandApi = $bandTypeLoaded
+        if ($bandApi) { try { $script:OrigBand = $cfg.Band } catch { $bandApi = $false } }
+        if (-not $bandApi -or $null -eq $script:OrigBand) {
+            Record '5 GHz band' 'FAIL' 'This Windows build has no band setting in the hotspot API' -Key Band
         } else {
-            try {
-                $cfg.Band = [Windows.Networking.NetworkOperators.TetheringWiFiBand]::FiveGigahertz
-                Await-Action ($mgr.ConfigureAccessPointAsync($cfg))
-                $script:BandChanged = $true
-                $now = $mgr.GetCurrentAccessPointConfiguration().Band
-                if ("$now" -eq 'FiveGigahertz') {
-                    Record '5 GHz band' 'PASS' 'Configured without admin' -Key Band
-                } else {
-                    Record '5 GHz band' 'FAIL' "Windows kept band = $now" -Key Band
+            Record 'Band setting before test' 'INFO' "$($script:OrigBand)"
+            $support = @{}
+            foreach ($b in 'TwoPointFourGigahertz', 'FiveGigahertz', 'SixGigahertz') {
+                try { $support[$b] = $cfg.IsBandSupported([Windows.Networking.NetworkOperators.TetheringWiFiBand]$b) }
+                catch { $support[$b] = 'unknown' }
+                Record "Band supported: $b" 'INFO' "$($support[$b])"
+            }
+            if ($support['FiveGigahertz'] -eq $false) {
+                Record '5 GHz band' 'FAIL' 'Adapter/driver reports 5 GHz hotspot is not supported' -Key Band
+            } else {
+                try {
+                    $cfg.Band = [Windows.Networking.NetworkOperators.TetheringWiFiBand]::FiveGigahertz
+                    Await-Action ($mgr.ConfigureAccessPointAsync($cfg))
+                    $script:BandChanged = $true
+                    $now = $mgr.GetCurrentAccessPointConfiguration().Band
+                    if ("$now" -eq 'FiveGigahertz') {
+                        Record '5 GHz band' 'PASS' 'Configured without admin' -Key Band
+                    } else {
+                        Record '5 GHz band' 'FAIL' "Windows kept band = $now" -Key Band
+                    }
+                } catch {
+                    Record '5 GHz band' 'FAIL' (Get-InnerMessage $_) -Key Band
                 }
-            } catch {
-                Record '5 GHz band' 'FAIL' (Get-InnerMessage $_) -Key Band
             }
         }
-    }
 
-    $startError = $null
-    try {
-        $sw = [Diagnostics.Stopwatch]::StartNew()
-        $res = Await-Op ($mgr.StartTetheringAsync()) $resultType
-        if ("$($res.Status)" -eq 'Success') {
-            $script:StartedHotspot = $true
-            Record 'Start hotspot without admin' 'PASS' "started in $([math]::Round($sw.Elapsed.TotalSeconds, 1)) s" -Key Hotspot
-        } else {
-            $startError = "$($res.Status) $($res.AdditionalErrorMessage)"
-        }
-    } catch { $startError = Get-InnerMessage $_ }
-
-    # Same fallback the app will use: if 5 GHz blocks the start, retry on Auto.
-    if ($startError -and $script:BandChanged) {
-        Record 'Start hotspot on 5 GHz' 'WARN' "$startError - retrying with Auto band"
+        $startError = $null
         try {
-            $cfg = $mgr.GetCurrentAccessPointConfiguration()
-            $cfg.Band = [Windows.Networking.NetworkOperators.TetheringWiFiBand]::Auto
-            Await-Action ($mgr.ConfigureAccessPointAsync($cfg))
-            Record '5 GHz band' 'FAIL' 'Hotspot would not start on 5 GHz (Auto fallback used)' -Key Band
+            $sw = [Diagnostics.Stopwatch]::StartNew()
             $res = Await-Op ($mgr.StartTetheringAsync()) $resultType
             if ("$($res.Status)" -eq 'Success') {
                 $script:StartedHotspot = $true
-                $startError = $null
-                Record 'Start hotspot without admin' 'PASS' 'started on Auto band' -Key Hotspot
+                Record 'Start hotspot without admin' 'PASS' "started in $([math]::Round($sw.Elapsed.TotalSeconds, 1)) s" -Key Hotspot
             } else {
                 $startError = "$($res.Status) $($res.AdditionalErrorMessage)"
             }
         } catch { $startError = Get-InnerMessage $_ }
-    }
-    if ($startError) { Record 'Start hotspot without admin' 'FAIL' $startError -Key Hotspot }
 
-    if ($script:StartedHotspot) {
-        Record 'Max devices' 'INFO' "$($mgr.MaxClientCount)"
-        for ($i = 0; $i -lt 10 -and -not $hostIp; $i++) {
-            $hostIp = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-                Where-Object { $_.IPAddress -like '192.168.137.*' } | Select-Object -First 1).IPAddress
-            if (-not $hostIp) { Start-Sleep -Seconds 1 }
+        # Same fallback the app will use: if 5 GHz blocks the start, retry on Auto.
+        if ($startError -and $script:BandChanged) {
+            Record 'Start hotspot on 5 GHz' 'WARN' "$startError - retrying with Auto band"
+            try {
+                $cfg = $mgr.GetCurrentAccessPointConfiguration()
+                $cfg.Band = [Windows.Networking.NetworkOperators.TetheringWiFiBand]::Auto
+                Await-Action ($mgr.ConfigureAccessPointAsync($cfg))
+                Record '5 GHz band' 'FAIL' 'Hotspot would not start on 5 GHz (Auto fallback used)' -Key Band
+                $res = Await-Op ($mgr.StartTetheringAsync()) $resultType
+                if ("$($res.Status)" -eq 'Success') {
+                    $script:StartedHotspot = $true
+                    $startError = $null
+                    Record 'Start hotspot without admin' 'PASS' 'started on Auto band' -Key Hotspot
+                } else {
+                    $startError = "$($res.Status) $($res.AdditionalErrorMessage)"
+                }
+            } catch { $startError = Get-InnerMessage $_ }
         }
-        if ($hostIp) { Record 'PC address on hotspot (for Moonlight)' 'INFO' $hostIp }
-        else { Record 'PC address on hotspot (for Moonlight)' 'WARN' 'No 192.168.137.x address found' }
+        if ($startError) { Record 'Start hotspot without admin' 'FAIL' $startError -Key Hotspot }
+
+        if ($script:StartedHotspot) {
+            Record 'Max devices' 'INFO' "$($mgr.MaxClientCount)"
+            for ($i = 0; $i -lt 10 -and -not $hostIp; $i++) {
+                $hostIp = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+                    Where-Object { $_.IPAddress -like '192.168.137.*' } | Select-Object -First 1).IPAddress
+                if (-not $hostIp) { Start-Sleep -Seconds 1 }
+            }
+            if ($hostIp) { Record 'PC address on hotspot (for Moonlight)' 'INFO' $hostIp }
+            else { Record 'PC address on hotspot (for Moonlight)' 'WARN' 'No 192.168.137.x address found' }
+        }
+    } else {
+        # ---------------------------------------------------------- 2. Phone hotspot (Mode A)
+        Section '2. Laptop on the phone''s 5 GHz hotspot'
+        Write-Host ''
+        Write-Host '  1. Phone: Settings > Mobile network > Personal hotspot > More > AP band = 5 GHz.' -ForegroundColor White
+        Write-Host '  2. Turn the phone hotspot on (mobile data can stay off).' -ForegroundColor White
+        Write-Host '  3. Connect this laptop to it from the Windows Wi-Fi menu.' -ForegroundColor White
+        $null = Read-Host '  Press Enter once the laptop is connected to the phone'
+        $wl = $null
+        $deadline = (Get-Date).AddSeconds(60)
+        do {
+            $wl = Get-WlanLink $wifi[0].Name
+            if ($wl.Connected -and $wl.Gateway) { break }
+            Start-Sleep -Seconds 2
+        } while ((Get-Date) -lt $deadline)
+
+        if (-not ($wl.Connected -and $wl.Gateway)) {
+            Record 'Laptop joined phone hotspot' 'FAIL' 'Laptop Wi-Fi is not connected (or has no gateway) after 60 s' -Key Hotspot
+        } else {
+            $hostIp = $wl.LaptopIp
+            $phoneIp = $wl.Gateway
+            Record 'Laptop joined phone hotspot' 'PASS' "SSID '$($wl.Ssid)', phone $phoneIp, laptop $hostIp" -Key Hotspot
+
+            $chan = 0
+            [void][int]::TryParse(($wl.Channel -replace '\D', ''), [ref]$chan)
+            $bandText = "$($wl.Band) channel $($wl.Channel), $($wl.RadioType)"
+            if ($wl.Band -match '^5' -or ($chan -ge 32 -and $chan -le 177)) {
+                if ($chan -ge 52 -and $chan -le 144) {
+                    Record 'Link on 5 GHz' 'WARN' "$bandText - DFS (radar) channel, can pause or move. Prefer 36-48 or 149-165." -Key Band
+                } else {
+                    Record 'Link on 5 GHz' 'PASS' $bandText -Key Band
+                }
+            } else {
+                Record 'Link on 5 GHz' 'FAIL' "$bandText - set the phone hotspot AP band to 5 GHz" -Key Band
+            }
+
+            $sig = 0
+            [void][int]::TryParse(($wl.Signal -replace '\D', ''), [ref]$sig)
+            Record 'Signal' $(if ($sig -ge 70) { 'PASS' } else { 'WARN' }) "$($wl.Signal), receive $($wl.RxRate) Mbps, transmit $($wl.TxRate) Mbps"
+
+            # Pinned = never hops to another network mid-game, and metered so Windows Update stays off the link.
+            $prof = @(netsh wlan show profile name="$($wl.Profile)" 2>$null)
+            $connMode = ($prof | Where-Object { $_ -match '^\s*Connection mode\s*:' } | Select-Object -First 1) -replace '^[^:]*:\s*', ''
+            $autoSw = ($prof | Where-Object { $_ -match '^\s*AutoSwitch\s*:' } | Select-Object -First 1) -replace '^[^:]*:\s*', ''
+            $cost = ($prof | Where-Object { $_ -match '^\s*Cost\s*:' } | Select-Object -First 1) -replace '^[^:]*:\s*', ''
+            $pinned = ($autoSw -match 'Do not switch') -and ($cost -match 'Fixed')
+            $pinDetail = "connection: $connMode; autoswitch: $autoSw; cost: $cost"
+            if (-not $pinned) { $pinDetail += " - fix: Firewall-Setup.cmd -PinNetwork `"$($wl.Profile)`"" }
+            Record 'Phone network pinned' $(if ($pinned) { 'PASS' } else { 'WARN' }) $pinDetail
+
+            $phoneConnected = $true
+            $reply = $null
+            try { $reply = (New-Object System.Net.NetworkInformation.Ping).Send($phoneIp, 1000) } catch { }
+            if ($reply -and $reply.Status -eq 'Success') {
+                Record 'Phone answers on the hotspot' 'PASS' "$($reply.RoundtripTime) ms" -Key Phone
+            } else {
+                Record 'Phone answers on the hotspot' 'WARN' 'Phone did not answer ping; the latency test may not work' -Key Phone
+            }
+        }
     }
+
 
     # ------------------------------------------------------------ 3. WLAN streaming mode
     Section '3. Lag fix: WlanSetInterface (no admin)'
@@ -579,46 +679,48 @@ try {
         }
     }
 
-    # ------------------------------------------------------------ 4. Phone
-    Section '4. Phone'
+    if ($Mode -eq 'LaptopHotspot') {
+        # ------------------------------------------------------------ 4. Phone
+        Section '4. Phone'
 
-    if ($NoPhone) {
-        Record 'Phone connects' 'SKIP' '-NoPhone' -Key Phone
-    } elseif (-not $script:StartedHotspot) {
-        Record 'Phone connects' 'SKIP' 'hotspot did not start' -Key Phone
-    } else {
-        $ap = $mgr.GetCurrentAccessPointConfiguration()
-        Write-Host ''
-        Write-Host '  Connect your phone to this Wi-Fi:' -ForegroundColor White
-        Write-Host "    Name:     $($ap.Ssid)"
-        Write-Host "    Password: $($ap.Passphrase)"
-        Write-Host '  Waiting up to 3 minutes...'
-        $deadline = (Get-Date).AddMinutes(3)
-        while ($mgr.ClientCount -eq 0 -and (Get-Date) -lt $deadline) {
-            if ("$($mgr.TetheringOperationalState)" -ne 'On') { break }
-            Start-Sleep -Seconds 2
-        }
-
-        if ($mgr.ClientCount -gt 0) {
-            $phoneConnected = $true
-            Start-Sleep -Seconds 3   # let DHCP finish so the client has an IP
-            foreach ($c in $mgr.GetTetheringClients()) {
-                $names = @($c.HostNames | ForEach-Object { $_.DisplayName }) -join ', '
-                Record 'Connected device' 'INFO' "$($c.MacAddress) $names"
-                $ip = $c.HostNames | Where-Object { "$($_.Type)" -eq 'Ipv4' } | Select-Object -First 1
-                if ($ip -and -not $phoneIp) { $phoneIp = $ip.CanonicalName }
-            }
-            if (-not $phoneIp) {
-                $phoneIp = (Get-NetNeighbor -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-                    Where-Object { $_.IPAddress -like '192.168.137.*' -and $_.IPAddress -ne $hostIp -and
-                                   $_.IPAddress -notlike '*.255' -and "$($_.State)" -ne 'Permanent' -and "$($_.State)" -ne 'Unreachable' } |
-                    Select-Object -First 1).IPAddress
-            }
-            Record 'Phone connects' 'PASS' "IP: $(if ($phoneIp) { $phoneIp } else { 'unknown' })" -Key Phone
-        } elseif ("$($mgr.TetheringOperationalState)" -ne 'On') {
-            Record 'Phone connects' 'FAIL' 'Hotspot turned off while waiting' -Key Phone
+        if ($NoPhone) {
+            Record 'Phone connects' 'SKIP' '-NoPhone' -Key Phone
+        } elseif (-not $script:StartedHotspot) {
+            Record 'Phone connects' 'SKIP' 'hotspot did not start' -Key Phone
         } else {
-            Record 'Phone connects' 'FAIL' 'No device connected within 3 minutes' -Key Phone
+            $ap = $mgr.GetCurrentAccessPointConfiguration()
+            Write-Host ''
+            Write-Host '  Connect your phone to this Wi-Fi:' -ForegroundColor White
+            Write-Host "    Name:     $($ap.Ssid)"
+            Write-Host "    Password: $($ap.Passphrase)"
+            Write-Host '  Waiting up to 3 minutes...'
+            $deadline = (Get-Date).AddMinutes(3)
+            while ($mgr.ClientCount -eq 0 -and (Get-Date) -lt $deadline) {
+                if ("$($mgr.TetheringOperationalState)" -ne 'On') { break }
+                Start-Sleep -Seconds 2
+            }
+
+            if ($mgr.ClientCount -gt 0) {
+                $phoneConnected = $true
+                Start-Sleep -Seconds 3   # let DHCP finish so the client has an IP
+                foreach ($c in $mgr.GetTetheringClients()) {
+                    $names = @($c.HostNames | ForEach-Object { $_.DisplayName }) -join ', '
+                    Record 'Connected device' 'INFO' "$($c.MacAddress) $names"
+                    $ip = $c.HostNames | Where-Object { "$($_.Type)" -eq 'Ipv4' } | Select-Object -First 1
+                    if ($ip -and -not $phoneIp) { $phoneIp = $ip.CanonicalName }
+                }
+                if (-not $phoneIp) {
+                    $phoneIp = (Get-NetNeighbor -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+                        Where-Object { $_.IPAddress -like '192.168.137.*' -and $_.IPAddress -ne $hostIp -and
+                                       $_.IPAddress -notlike '*.255' -and "$($_.State)" -ne 'Permanent' -and "$($_.State)" -ne 'Unreachable' } |
+                        Select-Object -First 1).IPAddress
+                }
+                Record 'Phone connects' 'PASS' "IP: $(if ($phoneIp) { $phoneIp } else { 'unknown' })" -Key Phone
+            } elseif ("$($mgr.TetheringOperationalState)" -ne 'On') {
+                Record 'Phone connects' 'FAIL' 'Hotspot turned off while waiting' -Key Phone
+            } else {
+                Record 'Phone connects' 'FAIL' 'No device connected within 3 minutes' -Key Phone
+            }
         }
     }
 
@@ -725,13 +827,14 @@ finally {
     }
 
     # ------------------------------------------------------------ Summary + report
+    $phoneMode = $Mode -eq 'PhoneHotspot'
     $checks = [ordered]@{
-        Hotspot   = 'Hotspot starts without admin'
-        Band      = 'Hotspot runs on 5 GHz'
+        Hotspot   = $(if ($phoneMode) { 'Laptop joined phone hotspot' } else { 'Hotspot starts without admin' })
+        Band      = $(if ($phoneMode) { 'Link on 5 GHz' } else { 'Hotspot runs on 5 GHz' })
         WlanSet   = 'Lag fix works without admin'
         Revert    = 'Lag fix undone when app closes'
         Crash     = 'Lag fix undone when app crashes'
-        Phone     = 'Phone connects'
+        Phone     = $(if ($phoneMode) { 'Phone answers on the hotspot' } else { 'Phone connects' })
         Lag       = 'Lag spikes reduced'
         Moonlight = 'Moonlight streams over hotspot'
     }
@@ -752,6 +855,7 @@ finally {
         'OphiStreamer - Milestone 0 hardware proof'
         "Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
         "Computer: $env:COMPUTERNAME"
+        "Mode: $Mode"
         ''
         'SUMMARY'
         ($summary | Format-Table -AutoSize -Wrap | Out-String -Width 250)

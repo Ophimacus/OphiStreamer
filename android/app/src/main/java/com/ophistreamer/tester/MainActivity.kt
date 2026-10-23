@@ -1,11 +1,14 @@
 package com.ophistreamer.tester
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
+import android.provider.Settings
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -43,6 +46,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -156,7 +160,10 @@ fun TesterScreen(onKeepScreenOn: (Boolean) -> Unit) {
     val clipboard = LocalClipboardManager.current
 
     var wifi by remember { mutableStateOf(NetProbe.wifiStatus(context)) }
-    var host by remember { mutableStateOf(wifi.gateway ?: "192.168.137.1") }
+    var hotspot by remember { mutableStateOf(NetProbe.phoneHotspot(context)) }
+    var host by remember { mutableStateOf(if (hotspot != null) "" else wifi.gateway ?: "192.168.137.1") }
+    var scanning by remember { mutableStateOf(false) }
+    var foundPcs by remember { mutableStateOf(listOf<String>()) }
     var controllers by remember { mutableStateOf(DeviceProbe.controllers()) }
     val screen = remember { DeviceProbe.screen(context) }
     val decoders = remember { DeviceProbe.decoders() }
@@ -175,11 +182,25 @@ fun TesterScreen(onKeepScreenOn: (Boolean) -> Unit) {
     val hasLocation = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
         PackageManager.PERMISSION_GRANTED
 
+    fun findPc() = scope.launch {
+        val hs = hotspot ?: return@launch
+        scanning = true
+        try {
+            foundPcs = NetProbe.findSunshineHosts(hs)
+            foundPcs.firstOrNull()?.let { host = it }
+        } finally {
+            scanning = false
+        }
+    }
+
     fun refresh() {
         wifi = NetProbe.wifiStatus(context)
-        wifi.gateway?.let { host = it }
+        hotspot = NetProbe.phoneHotspot(context)
+        if (hotspot != null) findPc() else wifi.gateway?.let { host = it }
         controllers = DeviceProbe.controllers()
     }
+
+    LaunchedEffect(Unit) { if (hotspot != null) findPc() }
 
     fun runTest() = scope.launch {
         running = true
@@ -194,10 +215,33 @@ fun TesterScreen(onKeepScreenOn: (Boolean) -> Unit) {
 
             phase = "Checking Wi-Fi"
             wifi = NetProbe.wifiStatus(context)
+            hotspot = NetProbe.phoneHotspot(context)
             controllers = DeviceProbe.controllers()
-            results += wifiChecks(wifi)
+            val hs = hotspot
+            if (hs != null) {
+                results += Check("Phone hotspot", Level.PASS, "On (${hs.iface}, ${hs.ip}). Check AP band is 5 GHz.")
+                val reachable = host.isNotBlank() &&
+                    withContext(Dispatchers.IO) { NetProbe.tcpConnectMs(null, host, 47989) } != null
+                if (!reachable) {
+                    phase = "Looking for the PC on the hotspot"
+                    foundPcs = NetProbe.findSunshineHosts(hs)
+                    host = foundPcs.firstOrNull() ?: ""
+                }
+                results += if (host.isNotBlank()) {
+                    Check("PC found", Level.PASS, host)
+                } else {
+                    Check("PC found", Level.FAIL, "No PC with Sunshine on the hotspot. Connect the laptop and start Sunshine.")
+                }
+            } else {
+                results += wifiChecks(wifi)
+            }
             results += controllerCheck(controllers)
-            val net = NetProbe.wifiNetwork(context)
+            if (host.isBlank()) {
+                checks = results
+                return@launch
+            }
+            // Over our own hotspot there is no client Network object; the kernel routes the subnet directly.
+            val net = if (hs != null) null else NetProbe.wifiNetwork(context)
 
             phase = "Checking Sunshine on $host"
             val open = withContext(Dispatchers.IO) {
@@ -235,10 +279,11 @@ fun TesterScreen(onKeepScreenOn: (Boolean) -> Unit) {
         }
     }
 
+    val apMode = hotspot != null
     val ready = checks.isNotEmpty() && checks.none { it.level == Level.FAIL }
     val status = when {
         running -> "Testing" to Accent
-        checks.isEmpty() -> (if (wifi.connected) "Not tested" else "Offline") to Muted
+        checks.isEmpty() -> (if (wifi.connected || apMode) "Not tested" else "Offline") to Muted
         ready -> "Ready to stream" to Good
         else -> "Needs attention" to Bad
     }
@@ -271,19 +316,37 @@ fun TesterScreen(onKeepScreenOn: (Boolean) -> Unit) {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Column {
                     Text(
-                        if (wifi.connected) "Connected to ${wifi.ssid ?: "Wi-Fi"}" else "Not on Wi-Fi",
+                        when {
+                            apMode -> "Phone hotspot on"
+                            wifi.connected -> "Connected to ${wifi.ssid ?: "Wi-Fi"}"
+                            else -> "Not connected"
+                        },
                         color = TextMain, fontSize = 20.sp, fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        if (wifi.connected) "PC at ${wifi.gateway ?: "?"} · ${wifi.frequencyMhz} MHz"
-                        else "Join the laptop's hotspot to begin",
+                        when {
+                            apMode && scanning -> "Looking for the PC…"
+                            apMode && host.isBlank() -> "Connect the laptop to this hotspot"
+                            apMode -> "PC at $host"
+                            wifi.connected -> "PC at ${wifi.gateway ?: "?"} · ${wifi.frequencyMhz} MHz"
+                            else -> "Turn on this phone's hotspot, or join the laptop's"
+                        },
                         color = Muted, fontSize = 13.sp,
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    StatTile(if (wifi.connected) wifi.band else "-", "BAND", bandLevel(wifi).color)
-                    StatTile(if (wifi.connected) "${wifi.rssiDbm}" else "-", "SIGNAL dBm", signalLevel(wifi.rssiDbm).color)
-                    StatTile(if (wifi.connected) "${wifi.linkMbps}" else "-", "LINK Mbps", linkLevel(wifi.linkMbps).color)
+                    if (apMode) {
+                        StatTile("ON", "HOTSPOT", Good)
+                        StatTile(if (host.isBlank()) "-" else "FOUND", "PC", if (host.isBlank()) Muted else Good)
+                        StatTile(
+                            if (samples.isEmpty()) "-" else "%.1f".format(LatencyStats(samples.toList()).avg),
+                            "AVG ms", TextMain,
+                        )
+                    } else {
+                        StatTile(if (wifi.connected) wifi.band else "-", "BAND", bandLevel(wifi).color)
+                        StatTile(if (wifi.connected) "${wifi.rssiDbm}" else "-", "SIGNAL dBm", signalLevel(wifi.rssiDbm).color)
+                        StatTile(if (wifi.connected) "${wifi.linkMbps}" else "-", "LINK Mbps", linkLevel(wifi.linkMbps).color)
+                    }
                 }
             }
         }
@@ -291,20 +354,46 @@ fun TesterScreen(onKeepScreenOn: (Boolean) -> Unit) {
         // ---- Connection
         SectionHeader("Connection")
         SteamCard {
-            SettingRow("Network", wifi.ssid ?: if (wifi.connected) "Name hidden" else "-")
-            SettingRow("Phone IP", wifi.phoneIp ?: "-")
-            SettingRow("PC address", wifi.gateway ?: "-")
-            SettingRow(
-                "Internet on hotspot",
-                if (wifi.hasInternet) "Yes" else "No",
-                if (wifi.hasInternet) Good else Warn,
-                sub = if (wifi.connected && !wifi.hasInternet) "Android's low-latency Wi-Fi mode needs it" else null,
-                last = true,
-            )
+            val hs = hotspot
+            if (hs != null) {
+                SettingRow("Mode", "Phone is the hotspot", Accent)
+                SettingRow("Phone IP", hs.ip)
+                SettingRow(
+                    "PC address",
+                    when {
+                        scanning -> "Searching…"
+                        host.isBlank() -> "Not found yet"
+                        else -> host
+                    },
+                    if (host.isBlank()) Warn else TextMain,
+                    sub = if (foundPcs.size > 1) "Found: ${foundPcs.joinToString()}" else null,
+                )
+                SettingRow(
+                    "Hotspot band",
+                    "Set to 5 GHz",
+                    Warn,
+                    sub = "Android doesn't let apps read it: Personal hotspot > More > AP band",
+                    last = true,
+                )
+            } else {
+                SettingRow("Network", wifi.ssid ?: if (wifi.connected) "Name hidden" else "-")
+                SettingRow("Phone IP", wifi.phoneIp ?: "-")
+                SettingRow("PC address", wifi.gateway ?: "-")
+                SettingRow(
+                    "Internet on hotspot",
+                    if (wifi.hasInternet) "Yes" else "No",
+                    if (wifi.hasInternet) Good else Warn,
+                    sub = if (wifi.connected && !wifi.hasInternet) "Android's low-latency Wi-Fi mode needs it" else null,
+                    last = true,
+                )
+            }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SecondaryButton("Refresh", enabled = !running, modifier = Modifier.weight(1f)) { refresh() }
-            if (!hasLocation) {
+            SecondaryButton("Refresh", enabled = !running && !scanning, modifier = Modifier.weight(1f)) { refresh() }
+            SecondaryButton("Hotspot settings", modifier = Modifier.weight(1f)) { openHotspotSettings(context) }
+        }
+        if (!apMode && !hasLocation) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SecondaryButton("Show Wi-Fi name", modifier = Modifier.weight(1f)) {
                     permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                 }
@@ -406,7 +495,7 @@ fun TesterScreen(onKeepScreenOn: (Boolean) -> Unit) {
 
         PrimaryButton(
             text = if (running) "Testing…" else "Run link test",
-            enabled = !running && host.isNotBlank(),
+            enabled = !running && !scanning && (host.isNotBlank() || apMode),
         ) { runTest() }
 
         if (running) {
@@ -452,7 +541,9 @@ fun TesterScreen(onKeepScreenOn: (Boolean) -> Unit) {
                 SecondaryButton(if (copied) "Copied - paste it to Claude" else "Copy report") {
                     val stats = if (samples.isEmpty()) null else LatencyStats(samples.toList())
                     clipboard.setText(
-                        AnnotatedString(buildReport(context, wifi, host, checks, stats, screen, decoders, advice, controllers)),
+                        AnnotatedString(
+                            buildReport(context, wifi, hotspot, host, checks, stats, screen, decoders, advice, controllers),
+                        ),
                     )
                     copied = true
                 }
@@ -656,6 +747,17 @@ private fun LatencyChart(samples: List<Double?>, expected: Int, modifier: Modifi
 
 // ---------------------------------------------------------------- checks
 
+/** Opens the hotspot screen; the tether action is not public on every build, so fall back to wireless settings. */
+private fun openHotspotSettings(context: Context) {
+    for (action in listOf("android.settings.TETHER_SETTINGS", Settings.ACTION_WIRELESS_SETTINGS)) {
+        try {
+            context.startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            return
+        } catch (_: ActivityNotFoundException) {
+        }
+    }
+}
+
 private fun fpsText(fps: Int) = if (fps == 0) "no" else "$fps fps"
 
 private fun bandLevel(w: WifiStatus) = when (w.band) {
@@ -735,6 +837,7 @@ private fun latencyCheck(s: LatencyStats): Check {
 private fun buildReport(
     context: Context,
     w: WifiStatus,
+    hotspot: HotspotInfo?,
     host: String,
     checks: List<Check>,
     stats: LatencyStats?,
@@ -755,8 +858,13 @@ private fun buildReport(
                     "720p ${d.maxFps720} fps, 1080p ${d.maxFps1080} fps",
             )
         }
-        appendLine("Wi-Fi: ${w.ssid ?: "?"} | ${w.band} ${w.frequencyMhz} MHz | ${w.rssiDbm} dBm | ${w.linkMbps} Mbps | internet ${w.hasInternet}")
-        appendLine("Phone IP: ${w.phoneIp ?: "?"} | PC: $host")
+        if (hotspot != null) {
+            appendLine("Mode: phone is the hotspot (${hotspot.iface}, ${hotspot.ip}) | PC: ${host.ifBlank { "not found" }}")
+        } else {
+            appendLine("Mode: phone on Wi-Fi")
+            appendLine("Wi-Fi: ${w.ssid ?: "?"} | ${w.band} ${w.frequencyMhz} MHz | ${w.rssiDbm} dBm | ${w.linkMbps} Mbps | internet ${w.hasInternet}")
+            appendLine("Phone IP: ${w.phoneIp ?: "?"} | PC: $host")
+        }
         for (c in controllers) {
             appendLine("Controller: ${c.name} (%04x:%04x, external ${c.external}, rumble ${c.vibrates})".format(c.vendorId, c.productId))
         }
