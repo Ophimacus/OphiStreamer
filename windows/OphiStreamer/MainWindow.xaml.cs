@@ -173,6 +173,9 @@ public partial class MainWindow : Window
             active
                 ? new Check("Phone keep-alive", "On", CheckLevel.Good, "Stops the phone's radio from dozing")
                 : new Check("Phone keep-alive", "Off", CheckLevel.Off),
+            active
+                ? new Check("Laptop stays awake", "On", CheckLevel.Good, "No sleep while you play. Closing the lid can still sleep it: set lid to 'Do nothing' in Power options")
+                : new Check("Laptop stays awake", "Off", CheckLevel.Off, "Turns on with Gaming mode"),
             new Check("Drops this session", _session.DropsThisSession.ToString(),
                 _session.DropsThisSession == 0 ? CheckLevel.Good : CheckLevel.Warn, "Reconnects automatically"),
             _phoneLink.StartError != null

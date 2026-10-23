@@ -23,6 +23,10 @@ public partial class App : System.Windows.Application
     private Icon? _iconOn, _iconOff;
     private bool? _trayActive;
 
+    private const uint EsContinuous = 0x80000000, EsSystemRequired = 0x00000001;
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern uint SetThreadExecutionState(uint flags);
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -114,6 +118,9 @@ public partial class App : System.Windows.Application
         {
             _tray.Icon = active ? _iconOn : _iconOff;
             _trayActive = active;
+            // Keep the laptop from sleeping while Gaming mode is on (the screen may still turn off).
+            // Windows drops this by itself if the app closes or crashes.
+            SetThreadExecutionState(active ? EsContinuous | EsSystemRequired : EsContinuous);
         }
         var text = (active ? "Gaming mode on - " : "OphiStreamer - ") + status;
         _tray.Text = text.Length > 63 ? text[..63] : text;
