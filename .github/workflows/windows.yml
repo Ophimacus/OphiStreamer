@@ -1,0 +1,49 @@
+name: Windows app
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "windows/**"
+      - ".github/workflows/windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      # One self-contained .exe: no .NET install needed on the laptop.
+      - name: Publish
+        run: >
+          dotnet publish windows/OphiStreamer/OphiStreamer.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          -o out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OphiStreamer-windows
+          path: out/OphiStreamer.exe
+
+      # Fixed download link for the laptop:
+      # https://github.com/<owner>/<repo>/releases/download/windows-latest/OphiStreamer.exe
+      - name: Publish to "windows-latest" release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete windows-latest --yes --cleanup-tag || true
+          gh release create windows-latest out/OphiStreamer.exe \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "OphiStreamer for Windows (latest build)" \
+            --notes "Built from $GITHUB_SHA. Single .exe, no install needed."

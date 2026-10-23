@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <!-- Only for the tray icon (NotifyIcon); the window is WPF. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <!-- Off on purpose: WPF and WinForms share type names (Application, Color, ...). -->
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>OphiStreamer</AssemblyName>
+    <RootNamespace>OphiStreamer</RootNamespace>
+    <Version>0.1.0</Version>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Product>OphiStreamer</Product>
+    <Company>Ophimacus</Company>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Microsoft's own package: reads Apollo / Sunshine / ViGEmBus service state. -->
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.0" />
+  </ItemGroup>
+
+</Project>

@@ -4,6 +4,7 @@ One-click Windows tray utility for direct, low-latency game streaming (Sunshine 
 
 | Folder | What it is |
 |---|---|
+| `windows` | **OphiStreamer for Windows**: tray app with one-click / automatic Gaming mode (lag fix, phone keep-alive, reconnect watchdog, connection log). Download: [OphiStreamer.exe](https://github.com/Ophimacus/OphiStreamer/releases/download/windows-latest/OphiStreamer.exe) |
 | `tests/m0` | Milestone 0 hardware proof for the Windows laptop. See [tests/m0/README.md](tests/m0/README.md) |
 | `android` | **OphiStreamer Tester**, an Android app for the phone that will stream: checks the hotspot band, signal, Sunshine ports and latency |
 
