@@ -162,6 +162,17 @@
               <CheckBox x:Name="AutoBox" Style="{StaticResource Check}" Content="Turn on Gaming mode automatically on the phone hotspot" Margin="0,12,0,0"/>
             </StackPanel>
           </Border>
+          <TextBlock Style="{StaticResource Caption}" Text="APOLLO (FOR PHONE PAIRING AND REPAIR)"/>
+          <Border Style="{StaticResource CardBorder}" Padding="16,12">
+            <StackPanel>
+              <TextBlock Text="The login you use for Apollo's web panel (https://localhost:47990). Stored encrypted for your Windows account." FontSize="12" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+              <TextBlock Text="Username" FontSize="13"/>
+              <TextBox x:Name="ApolloUserBox" Margin="0,4,0,8"/>
+              <TextBlock Text="Password" FontSize="13"/>
+              <PasswordBox x:Name="ApolloPassBox" Margin="0,4,0,10" Background="#0F151D" Foreground="#DCDEDF" BorderBrush="#26313E" Padding="8,6" FontSize="13"/>
+              <Button x:Name="TestApolloBtn" Style="{StaticResource Secondary}" Content="Save and test login" HorizontalAlignment="Left"/>
+            </StackPanel>
+          </Border>
           <TextBlock Style="{StaticResource Caption}" Text="APP"/>
           <Border Style="{StaticResource CardBorder}" Padding="16,12">
             <CheckBox x:Name="StartupBox" Style="{StaticResource Check}" Content="Start OphiStreamer with Windows (in the tray)"/>

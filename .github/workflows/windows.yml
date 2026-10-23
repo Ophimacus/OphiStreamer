@@ -29,21 +29,32 @@ jobs:
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
           -o out
 
+      - name: Build installer
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress | Out-Null
+          $version = ([xml](Get-Content windows/OphiStreamer/OphiStreamer.csproj)).Project.PropertyGroup.Version | Select-Object -First 1
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" windows/installer/OphiStreamer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - uses: actions/upload-artifact@v4
         with:
           name: OphiStreamer-windows
-          path: out/OphiStreamer.exe
+          path: |
+            out/OphiStreamer.exe
+            out/OphiStreamerSetup.exe
 
-      # Fixed download link for the laptop:
-      # https://github.com/<owner>/<repo>/releases/download/windows-latest/OphiStreamer.exe
+      # Fixed download links for the laptop:
+      # https://github.com/<owner>/<repo>/releases/download/windows-latest/OphiStreamerSetup.exe
+      # https://github.com/<owner>/<repo>/releases/download/windows-latest/OphiStreamer.exe (portable)
       - name: Publish to "windows-latest" release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete windows-latest --yes --cleanup-tag || true
-          gh release create windows-latest out/OphiStreamer.exe \
+          gh release create windows-latest out/OphiStreamerSetup.exe out/OphiStreamer.exe \
             --prerelease \
             --target "$GITHUB_SHA" \
             --title "OphiStreamer for Windows (latest build)" \
-            --notes "Built from $GITHUB_SHA. Single .exe, no install needed."
+            --notes "Built from $GITHUB_SHA. OphiStreamerSetup.exe installs everything (one admin prompt). OphiStreamer.exe is the portable app."

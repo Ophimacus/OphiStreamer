@@ -78,6 +78,29 @@ public static class WifiLink
     /// <summary>Asks Windows to (re)connect to a saved Wi-Fi profile right away.</summary>
     public static void Connect(string profile) => Netsh($"wlan connect name=\"{profile}\"");
 
+    /// <summary>
+    /// Pins the phone network: connect automatically, never auto-switch to another network mid-game,
+    /// and mark it metered so Windows Update stays off it. Needs one admin prompt; false if declined.
+    /// </summary>
+    public static bool PinProfile(string profile)
+    {
+        try
+        {
+            using var p = Process.Start(new ProcessStartInfo("netsh", $"wlan set profileparameter name=\"{profile}\" connectionmode=auto autoswitch=No cost=Fixed")
+            {
+                UseShellExecute = true,
+                Verb = "runas",
+                WindowStyle = ProcessWindowStyle.Hidden,
+            });
+            p?.WaitForExit(10000);
+            return p?.ExitCode == 0;
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return false; // admin prompt declined
+        }
+    }
+
     /// <summary>True when the driver has 802.11n/ac switched off (link capped at 54 Mbps).</summary>
     public static bool LegacyRadioOnly()
     {

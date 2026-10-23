@@ -30,11 +30,24 @@ public partial class MainWindow : Window
     /// <summary>Set by App when the user really exits (tray menu), so closing doesn't just hide.</summary>
     public bool AllowClose { get; set; }
 
-    public MainWindow(SessionController session, AppSettings settings)
+    private readonly ApolloClient _apollo;
+    private readonly PhoneLink _phoneLink;
+
+    public MainWindow(SessionController session, AppSettings settings, ApolloClient apollo, PhoneLink phoneLink)
     {
         InitializeComponent();
         _session = session;
         _settings = settings;
+        _apollo = apollo;
+        _phoneLink = phoneLink;
+        TestApolloBtn.Click += async (_, _) =>
+        {
+            SaveSettings();
+            SavedText.Text = "Checking Apollo login...";
+            var err = await _apollo.TestLoginAsync();
+            SavedText.Foreground = err == null ? Good : Bad;
+            SavedText.Text = err ?? "Apollo login works. Phone pairing and Repair are ready.";
+        };
 
         TitleBar.MouseLeftButtonDown += (_, _) => DragMove();
         MinBtn.Click += (_, _) => WindowState = WindowState.Minimized;
@@ -82,6 +95,11 @@ public partial class MainWindow : Window
         if (ssid == null) return;
         _settings.PhoneSsid = ssid;
         _settings.Save();
+        // One admin prompt: keep Windows on this network during games and off Windows Update.
+        var profile = _session.Link.Profile ?? ssid;
+        PhoneSsidText.Text = WifiLink.PinProfile(profile)
+            ? $"{ssid} (pinned: no auto-switching, metered)"
+            : $"{ssid} (not pinned: admin prompt declined)";
         Refresh();
     }
 
@@ -157,6 +175,11 @@ public partial class MainWindow : Window
                 : new Check("Phone keep-alive", "Off", CheckLevel.Off),
             new Check("Drops this session", _session.DropsThisSession.ToString(),
                 _session.DropsThisSession == 0 ? CheckLevel.Good : CheckLevel.Warn, "Reconnects automatically"),
+            _phoneLink.StartError != null
+                ? new Check("Phone link", "Blocked", CheckLevel.Bad, $"Port {PhoneLink.Port}: {_phoneLink.StartError}")
+                : _apollo.HasCredentials
+                    ? new Check("Phone link", "Ready", CheckLevel.Good, "Pairing without PIN, Repair and calibration from the phone")
+                    : new Check("Phone link", "Needs Apollo login", CheckLevel.Warn, "Add it in Settings for PIN-free pairing and Repair"),
         };
         rows.AddRange(_checks);
 
@@ -237,6 +260,8 @@ public partial class MainWindow : Window
         SsidBox.Text = _settings.PhoneSsid ?? _session.Link.Ssid ?? "";
         AutoBox.IsChecked = _settings.AutoGamingMode;
         StartupBox.IsChecked = _settings.StartWithWindows;
+        ApolloUserBox.Text = _settings.ApolloUser ?? "";
+        ApolloPassBox.Password = _settings.ApolloPassword ?? "";
         SavedText.Text = "";
     }
 
@@ -245,7 +270,10 @@ public partial class MainWindow : Window
         _settings.PhoneSsid = string.IsNullOrWhiteSpace(SsidBox.Text) ? null : SsidBox.Text.Trim();
         _settings.AutoGamingMode = AutoBox.IsChecked == true;
         _settings.StartWithWindows = StartupBox.IsChecked == true;
+        _settings.ApolloUser = string.IsNullOrWhiteSpace(ApolloUserBox.Text) ? null : ApolloUserBox.Text.Trim();
+        _settings.ApolloPassword = string.IsNullOrEmpty(ApolloPassBox.Password) ? null : ApolloPassBox.Password;
         _settings.Save();
+        SavedText.Foreground = Good;
         SavedText.Text = "Saved.";
         Refresh();
     }

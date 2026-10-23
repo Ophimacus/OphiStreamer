@@ -13,6 +13,38 @@ public sealed class AppSettings
     public bool AutoGamingMode { get; set; } = true;
     public bool StartWithWindows { get; set; } = true;
 
+    /// <summary>Apollo web-panel login, used for PIN-free pairing and Repair.</summary>
+    public string? ApolloUser { get; set; }
+
+    /// <summary>Stored encrypted for this Windows user (DPAPI); use <see cref="ApolloPassword"/>.</summary>
+    public string? ApolloPasswordProtected { get; set; }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? ApolloPassword
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(ApolloPasswordProtected)) return null;
+            try
+            {
+                var bytes = System.Security.Cryptography.ProtectedData.Unprotect(
+                    Convert.FromBase64String(ApolloPasswordProtected), null, System.Security.Cryptography.DataProtectionScope.CurrentUser);
+                return System.Text.Encoding.UTF8.GetString(bytes);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+        set
+        {
+            ApolloPasswordProtected = string.IsNullOrEmpty(value)
+                ? null
+                : Convert.ToBase64String(System.Security.Cryptography.ProtectedData.Protect(
+                    System.Text.Encoding.UTF8.GetBytes(value), null, System.Security.Cryptography.DataProtectionScope.CurrentUser));
+        }
+    }
+
     public static string Folder { get; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OphiStreamer");
     private static string FilePath => Path.Combine(Folder, "settings.json");
 
