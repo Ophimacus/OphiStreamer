@@ -141,6 +141,24 @@ Goal: no drops, no spikes. Layers, in order of impact:
 
 ---
 
+## 2c-quater. Milestone 0 results (Acer + Honor X7d, 2026-10-23, phone-hotspot mode)
+
+**Confirmed on real hardware (the core design holds):**
+- `WlanSetInterface` lag fix works **without admin** (Intel Wireless-AC 9560, driver 24.10.0.4).
+- Windows **undoes it when the app closes and when the app is killed**, so the crash-safety design is valid.
+- Network pinning (auto-connect, no auto-switch, metered) applied fine.
+- ViGEmBus present, Sunshine reachable on all ports, Moonlight streamed; user: "connection was great and responsiveness was great".
+- Phone decoders: HEVC/H.264 hardware **720p at 120 fps**, so 720p120 is a real option.
+
+**Problems found (setup, not design):**
+- Laptop driver offered only **802.11a/g** ("Radio types supported: 802.11g 802.11a"), so the link ran **802.11g at 54 Mbps**. The 802.11n/ac mode is switched off in the adapter's advanced settings. Test now flags this.
+- Phone hotspot started on **2.4 GHz channel 2**; the log shows it moved to **channel 36 (5 GHz)** mid-run with a **134 s disconnect** (likely the band change). Latency phases were measured mostly on the 2.4 GHz/54 Mbps link, so the A/B numbers (spikes 78 → 32, max 178 → 594 ms, 17 lost) are not a clean comparison.
+- Apollo's **SudoMaker virtual display** driver is installed alongside Sunshine; check Sunshine captures the right display and encodes with NVENC.
+
+**Next run:** 802.11ac enabled + phone fixed on 5 GHz before starting, 180 s phases, then compare.
+
+---
+
 ## 2d. One-click experience (the promise)
 
 **Install (once, on the Acer):** run `OphiStreamerSetup.exe` → **Install** → approve **one** Windows admin prompt. The installer, silently:

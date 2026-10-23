@@ -423,6 +423,15 @@ try {
     netsh wlan show drivers | Where-Object { $_ -match 'Radio types supported|Hosted network supported|Wi-Fi Direct' } |
         ForEach-Object { Record 'Driver' 'INFO' $_.Trim() }
 
+    # If only 802.11a/g are offered, 802.11n/ac is switched off in the driver and the link caps at 54 Mbps.
+    $radioLine = netsh wlan show drivers | Where-Object { $_ -match 'Radio types supported' } | Select-Object -First 1
+    if ($radioLine -and $radioLine -notmatch '802\.11(n|ac|ax|be)') {
+        $radios = ($radioLine -replace '^[^:]*:\s*', '').Trim()
+        Record 'Wi-Fi standards enabled' 'FAIL' "Driver only offers $radios (max 54 Mbps). Device Manager > Wi-Fi adapter > Advanced: set '802.11n/ac Wireless Mode' to 802.11ac and 'Wireless Mode' to include n/ac." -Key Radio
+    } elseif ($radioLine) {
+        Record 'Wi-Fi standards enabled' 'PASS' ($radioLine -replace '^[^:]*:\s*', '').Trim() -Key Radio
+    }
+
     $link = @(netsh wlan show interfaces | Where-Object { $_ -match '^\s*(Name|State|SSID|Radio type|Band|Channel|Signal)\s*:' })
     foreach ($l in $link) { Record 'Laptop Wi-Fi link' 'INFO' $l.Trim() }
     $bandLine = $link | Where-Object { $_ -match '^\s*Band\s*:' } | Select-Object -First 1
@@ -907,6 +916,7 @@ finally {
     # ------------------------------------------------------------ Summary + report
     $phoneMode = $Mode -eq 'PhoneHotspot'
     $checks = [ordered]@{
+        Radio     = 'Wi-Fi standards enabled (n/ac)'
         Hotspot   = $(if ($phoneMode) { 'Laptop joined phone hotspot' } else { 'Hotspot starts without admin' })
         Band      = $(if ($phoneMode) { 'Link on 5 GHz' } else { 'Hotspot runs on 5 GHz' })
         WlanSet   = 'Lag fix works without admin'

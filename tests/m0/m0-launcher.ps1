@@ -43,6 +43,7 @@ $Steps = [ordered]@{
 # Which test result lines belong to which step.
 $StepOf = @{
     'Wi-Fi adapter present'          = 'link'
+    'Wi-Fi standards enabled'        = 'link'
     'WLAN AutoConfig service'        = 'link'
     'Laptop joined phone hotspot'    = 'link'
     'Link on 5 GHz'                  = 'link'
