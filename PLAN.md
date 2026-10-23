@@ -152,6 +152,20 @@ User tested both and chose **Apollo** (PC, `winget install ClassicOldSong.Apollo
 
 ---
 
+## 2c-app. One-stop Android app (decided 2026-10-23)
+
+User doesn't want to open Artemis separately. **OphiStreamer for Android = a fork of Artemis** (GPL-3.0, `ClassicOldSong/moonlight-android`, branch `moonlight-noir`) at **github.com/Ophimacus/OphiStreamer-Android**. The fork must stay open source under GPL-3.0 with attribution to Moonlight/Artemis. Kept as a GitHub fork so upstream fixes can be merged.
+
+Stages (each ends with an installable APK from GitHub Actions):
+1. **Fork builds under its own identity:** new application ID and name so it installs next to Artemis; CI builds the APK (NDK + submodules) and publishes a `latest` release.
+2. **Link Check inside:** the current Link Check screen (hotspot detection, PC discovery, latency, decoders, controller) becomes a tab; **calibration writes the stream settings directly** (resolution, fps, codec, bitrate), no manual typing.
+3. **SteamOS restyle:** PC list, app grid, settings and in-stream overlay in the approved style (tokens §2b).
+4. **One-tap Play:** home screen = status hero + one big PLAY button that pairs (once), checks the link and starts the stream; gamepad-navigable.
+
+The standalone Link Check app (`android/` in this repo) stays until stage 2 replaces it.
+
+---
+
 ## 2c-quater. Milestone 0 results (Acer + Honor X7d, 2026-10-23, phone-hotspot mode)
 
 **Confirmed on real hardware (the core design holds):**
