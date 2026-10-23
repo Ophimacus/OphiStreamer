@@ -186,6 +186,23 @@ Positioning: Artemis is a powerful client for experts; **OphiStreamer is a compl
 
 ---
 
+## 2c-bed. Bed mode (designed 2026-10-23)
+
+Use case: lying in bed in a dark room, phone in the GameSir, laptop elsewhere with its screen off (Apollo virtual display). Honor X7d has an **LCD**, so dark colors don't save power and its lowest system brightness can still be harsh in the dark.
+
+Research basis: eye strain comes mainly from the gap between screen brightness and room brightness; blue light doesn't harm the retina but delays sleep; recommended: lowest comfortable brightness, night light, breaks, stop before sleeping. No high-quality study on phone gaming in bed specifically.
+
+**Bed mode** (toggle in the Quick menu; Home suggests it 21:00-06:00):
+1. **Dim**: app and stream use a "bed brightness" (default 15 %, window `screenBrightness`), plus optional **extra dim** (black overlay up to 40 %) to go below the LCD's minimum.
+2. **No flipping**: the stream locks to the landscape side it started in (`SCREEN_ORIENTATION_LOCKED`) so rolling onto your side doesn't rotate it. (Artemis uses `USER_LANDSCAPE`, which can flip 180 degrees.)
+3. **Quiet**: controller rumble and phone vibration off, PC audio off; previous values restored when Bed mode is turned off.
+4. **Sleep timer**: off / 30 / 60 / 90 min; one-minute warning, then quits the game on the PC so it doesn't run all night (the Windows app will later also put the laptop to sleep).
+5. **Heat**: heat guard warns earlier (moderate instead of severe) because blankets trap heat.
+6. **Night light / Do Not Disturb** shortcuts so notifications don't flash over the game.
+7. Home shows "Bed mode on · sleep in 60 min".
+
+---
+
 ## 2c-quater. Milestone 0 results (Acer + Honor X7d, 2026-10-23, phone-hotspot mode)
 
 **Confirmed on real hardware (the core design holds):**
