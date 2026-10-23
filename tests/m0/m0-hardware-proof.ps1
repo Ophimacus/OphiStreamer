@@ -467,16 +467,25 @@ try {
     Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue |
         ForEach-Object { Record 'GPU' 'INFO' "$($_.Name) (driver $($_.DriverVersion))" }
 
-    $sunshine = Get-Process sunshine -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($sunshine) { Record 'Sunshine running' 'PASS' $sunshine.Path }
-    else { Record 'Sunshine running' 'WARN' 'Start Sunshine before the Moonlight step' }
+    # Apollo (preferred) and Sunshine share ports and both run as sunshine.exe, so check the services.
+    $hosts = @(Get-Service ApolloService, SunshineService -ErrorAction SilentlyContinue | Where-Object Status -eq 'Running')
+    if ($hosts.Count -gt 1) {
+        Record 'Streaming host' 'FAIL' 'Apollo and Sunshine are both running and fight over the same ports. Stop and disable SunshineService.'
+    } elseif ($hosts.Count -eq 1) {
+        $hostName = if ($hosts[0].Name -eq 'ApolloService') { 'Apollo' } else { 'Sunshine (Apollo is the preferred host)' }
+        Record 'Streaming host' 'PASS' $hostName
+    } elseif (Get-Process sunshine -ErrorAction SilentlyContinue) {
+        Record 'Streaming host' 'PASS' 'running (not as a service)'
+    } else {
+        Record 'Streaming host' 'WARN' 'Start Apollo before the stream step'
+    }
 
-    # Sunshine creates a virtual Xbox pad through ViGEmBus; without it the controller does nothing in games.
+    # Apollo/Sunshine create a virtual Xbox pad through ViGEmBus; without it the controller does nothing in games.
     $vigem = Get-Service -Name ViGEmBus -ErrorAction SilentlyContinue
     if ($vigem) {
         Record 'Controller driver (ViGEmBus)' 'PASS' "installed, $($vigem.Status)"
     } else {
-        Record 'Controller driver (ViGEmBus)' 'WARN' 'Not installed: the phone controller will not reach games. Re-run the Sunshine installer and tick ViGEmBus.'
+        Record 'Controller driver (ViGEmBus)' 'WARN' 'Not installed: the phone controller will not reach games. Run: winget install ViGEm.ViGEmBus'
     }
 
     if ($Mode -eq 'LaptopHotspot') {
@@ -848,9 +857,9 @@ try {
         $fixState = if ($script:HFix -ne [IntPtr]::Zero) { 'ON' } else { 'OFF' }
         Write-Host ''
         Write-Host "  Test a real stream now (lag fix is $fixState):" -ForegroundColor White
-        Write-Host '    1. Make sure Sunshine is running on this PC.'
+        Write-Host '    1. Make sure Apollo is running on this PC.'
         Write-Host '    2. First time? Run Firewall-Setup.cmd (asks for admin once).'
-        Write-Host "    3. On the phone: Moonlight -> + (Add PC) -> $hostIp"
+        Write-Host "    3. On the phone: Artemis (or Moonlight) -> + (Add PC) -> $hostIp"
         Write-Host '    4. Pair and play for a minute or two.'
         if ($GuiAnswerDir) {
             # The launcher window shows its own question and writes "y|notes" to this file.

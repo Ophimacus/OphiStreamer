@@ -91,7 +91,10 @@ object DeviceProbe {
             }
             .distinctBy { Triple(it.name, it.vendorId, it.productId) }
 
-    /** A safe starting point for Moonlight on this phone, plus what to try once that is smooth. */
+    /**
+     * A safe starting point for Artemis + Apollo on this phone, plus what to try once that is smooth.
+     * Apollo creates a virtual display at the phone's own resolution, so the stream uses the native size.
+     */
     fun advice(screen: ScreenInfo, decoders: List<DecoderInfo>): MoonlightAdvice {
         val hevc = decoders.first { it.label.startsWith("H.265") }
         val avc = decoders.first { it.label == "H.264" }
@@ -99,10 +102,10 @@ object DeviceProbe {
         val codec = if (hevc.hardware && (if (use1080) hevc.maxFps1080 else hevc.maxFps720) >= 60) hevc else avc
         val codecMax = if (use1080) codec.maxFps1080 else codec.maxFps720
         val higherFps = listOf(120, 90).firstOrNull { it <= screen.maxRefreshHz && it <= codecMax }
-        val baseMbps = if (use1080) 20 else 10
+        val baseMbps = if (use1080) 20 else 12
         val bitrate = if (codec === avc) (baseMbps * 1.5).roundToInt() else baseMbps
         return MoonlightAdvice(
-            resolution = if (use1080) "1920×1080" else "1280×720",
+            resolution = "${screen.widthPx}×${screen.heightPx} (native)",
             fps = 60,
             codec = codec.label,
             bitrateMbps = bitrate,

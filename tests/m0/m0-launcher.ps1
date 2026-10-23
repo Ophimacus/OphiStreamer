@@ -37,13 +37,14 @@ $Steps = [ordered]@{
     lagfix    = @('Lag fix', 'Works without admin, undone on exit and crash')
     latency   = @('Latency', 'Without vs. with the lag fix')
     stable    = @('Connection log', 'Every second: drops, signal, channel, ping')
-    moonlight = @('Moonlight stream', 'You confirm a real stream')
+    moonlight = @('Stream (Artemis)', 'You confirm a real stream')
 }
 
 # Which test result lines belong to which step.
 $StepOf = @{
     'Wi-Fi adapter present'          = 'link'
     'Wi-Fi standards enabled'        = 'link'
+    'Streaming host'                 = 'link'
     'WLAN AutoConfig service'        = 'link'
     'Laptop joined phone hotspot'    = 'link'
     'Link on 5 GHz'                  = 'link'
@@ -300,13 +301,13 @@ $xaml = @"
                 </Grid>
               </Border>
               <TextBlock Margin="16,12" Foreground="#8B98A5" FontSize="12" TextWrapping="Wrap"
-                         Text="Phone: Personal hotspot &gt; More &gt; AP band = 5 GHz (once), then turn the hotspot on. Plug the laptop in and start Sunshine."/>
+                         Text="Phone: Personal hotspot &gt; More &gt; AP band = 5 GHz (once), then turn the hotspot on. Plug the laptop in and start Apollo."/>
             </StackPanel>
           </Border>
 
           <Border x:Name="AskPanel" Visibility="Collapsed" Background="#151C25" BorderBrush="#1A9FFF" BorderThickness="1" CornerRadius="6" Padding="16" Margin="0,18,0,0">
             <StackPanel>
-              <TextBlock Text="Stream with Moonlight now" FontSize="16" FontWeight="SemiBold"/>
+              <TextBlock Text="Stream with Artemis now" FontSize="16" FontWeight="SemiBold"/>
               <TextBlock x:Name="AskText" Foreground="#8B98A5" FontSize="13" TextWrapping="Wrap" Margin="0,4,0,10"/>
               <TextBlock Text="Notes (optional): stutter, quality, errors" Foreground="#8B98A5" FontSize="12" Margin="0,0,0,6"/>
               <TextBox x:Name="NotesBox"/>
@@ -399,11 +400,11 @@ function Set-Inputs([bool]$Enabled) {
 
 function Handle-Line([string]$Line) {
     if ($Line -match '^@@ASK moonlight\|([^|]*)\|(.*)$') {
-        $ui.AskText.Text = "Lag fix is $($Matches[2]). On the phone: Moonlight, tap +, add $($Matches[1]). Pair, play for a minute or two, then answer here."
+        $ui.AskText.Text = "Lag fix is $($Matches[2]). On the phone: Artemis (or Moonlight), tap +, add $($Matches[1]). Pair, play for a minute or two, then answer here."
         $ui.AskPanel.Visibility = 'Visible'
         $ui.AskPanel.BringIntoView()
         Set-Step 'moonlight' 'RUNNING' 'Waiting for your answer'
-        $ui.HeroSub.Text = 'Try a real stream with Moonlight, then answer below.'
+        $ui.HeroSub.Text = 'Try a real stream with Artemis, then answer below.'
         return
     }
     if ($Line -match '^Report saved: (.+)$') {

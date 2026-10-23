@@ -141,6 +141,17 @@ Goal: no drops, no spikes. Layers, in order of impact:
 
 ---
 
+## 2c-host. Streaming host: Apollo + Artemis (decided 2026-10-23)
+
+User tested both and chose **Apollo** (PC, `winget install ClassicOldSong.Apollo`) + **Artemis** (phone): "the best option there is for me".
+- Apollo is a Sunshine fork. It creates a **virtual display (SudoVDA) at the phone's own resolution** when a stream starts and removes it when the app quits, remembers display settings per client, and the setup the user prefers **turns the laptop's physical screen off** during the stream.
+- Benefits here: native 1610x720 (no scaling or black bars), up to 120 Hz to match the phone, and the laptop panel off means less heat and power on the Nitro 5.
+- **Never run Apollo and Sunshine together** (same ports 47984-48010 and 47990; both are `sunshine.exe`). OphiStreamer's installer installs Apollo, sets `SunshineService` to Disabled if present, and the app warns if both services are running.
+- Sunshine + Moonlight stays as a fallback; everything else in this plan (lag fix, pinning, calibration, ViGEmBus) works the same with either host.
+- Artemis settings start point: **1610x720 (native) at 60 fps, HEVC, ~12 Mbps**; try **120 fps at ~18 Mbps** once 60 is smooth.
+
+---
+
 ## 2c-quater. Milestone 0 results (Acer + Honor X7d, 2026-10-23, phone-hotspot mode)
 
 **Confirmed on real hardware (the core design holds):**
@@ -163,20 +174,20 @@ Goal: no drops, no spikes. Layers, in order of impact:
 
 **Install (once, on the Acer):** run `OphiStreamerSetup.exe` → **Install** → approve **one** Windows admin prompt. The installer, silently:
 1. Installs OphiStreamer and starts it at logon (tray).
-2. Installs **Sunshine** (`winget install LizardByte.Sunshine`) and **ViGEmBus** (`winget install ViGEm.ViGEmBus`) if missing, both IDs confirmed in winget. Checkboxes, ticked by default.
+2. Installs **Apollo** (`winget install ClassicOldSong.Apollo`, ID confirmed in winget) and **ViGEmBus** (`winget install ViGEm.ViGEmBus`) if missing, and disables `SunshineService` if one exists (never two hosts). Checkboxes, ticked by default; Sunshine (`LizardByte.Sunshine`) offered as the fallback host.
 3. Adds the firewall rules (Sunshine + calibration port, hotspot subnet only) and turns off the hotspot's 5-minute idle shutdown.
 
 **First run (once):** a 3-step welcome wizard in the SteamOS style:
 1. **Network check:** Intel card → "Connect this laptop to your 5 GHz Wi-Fi" (detects when done, auto-continues).
 2. **Join the phone:** hotspot starts on 5 GHz and shows a **Wi-Fi QR code**; scan with the Honor camera to join (Android remembers it, so it auto-joins next time). Waits for the phone, then "HONOR X7d connected".
-3. **Pair Moonlight:** in Moonlight tap the PC, enter the 4-digit PIN shown; the wizard shows where to type it (one-time Sunshine pairing). Then it runs **calibration** (below) automatically.
+3. **Pair Artemis:** in Artemis tap the PC, enter the 4-digit PIN shown; the wizard shows where to type it (one-time Apollo pairing). Then it runs **calibration** (below) automatically.
 
-**Every day after that:** one click on **Start gaming mode** (tray or window) → 5 GHz hotspot on + lag fix on → waits for the phone → phone auto-joins → "Ready", open Moonlight and tap the PC. Stop: one click, or it restores by itself when the phone leaves / laptop sleeps.
+**Every day after that:** one click on **Start gaming mode** (tray or window) → 5 GHz hotspot on + lag fix on → waits for the phone → phone auto-joins → "Ready", open Artemis and tap the PC (Apollo switches to the phone-sized virtual display and turns the laptop screen off). Stop: one click, or it restores by itself when the phone leaves / laptop sleeps.
 
 **What can and can't be guaranteed**
 - Guaranteed by the app: one installer, one admin prompt, one click to start/stop, automatic restore, a clear on-screen fix instead of a silent failure for every known problem.
 - Depends on hardware (Milestone 0 confirms): 5 GHz on Intel needs the laptop connected to 5 GHz Wi-Fi; if the driver refuses 5 GHz, the app falls back to 2.4 GHz and says so.
-- One-time manual steps that can't be automated: Moonlight PIN pairing, and typing the calibrated settings into Moonlight (Moonlight has no settings API). The phone app shows exactly what to enter.
+- One-time manual steps that can't be automated: Artemis PIN pairing, and typing the calibrated settings into Artemis (neither Artemis nor Moonlight has a settings API). The phone app shows exactly what to enter.
 
 ---
 

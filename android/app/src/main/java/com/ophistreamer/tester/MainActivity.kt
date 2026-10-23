@@ -230,7 +230,7 @@ fun TesterScreen(onKeepScreenOn: (Boolean) -> Unit) {
                 results += if (host.isNotBlank()) {
                     Check("PC found", Level.PASS, host)
                 } else {
-                    Check("PC found", Level.FAIL, "No PC with Sunshine on the hotspot. Connect the laptop and start Sunshine.")
+                    Check("PC found", Level.FAIL, "No PC with Apollo on the hotspot. Connect the laptop and start Apollo.")
                 }
             } else {
                 results += wifiChecks(wifi)
@@ -243,22 +243,22 @@ fun TesterScreen(onKeepScreenOn: (Boolean) -> Unit) {
             // Over our own hotspot there is no client Network object; the kernel routes the subnet directly.
             val net = if (hs != null) null else NetProbe.wifiNetwork(context)
 
-            phase = "Checking Sunshine on $host"
+            phase = "Checking Apollo on $host"
             val open = withContext(Dispatchers.IO) {
                 NetProbe.SUNSHINE_TCP_PORTS.associateWith { NetProbe.tcpConnectMs(net, host, it) != null }
             }
             results += portCheck(open)
             val info = withContext(Dispatchers.IO) { NetProbe.sunshineInfo(net, host) }
             results += if (info != null) {
-                Check("Sunshine found", Level.PASS, info)
+                Check("Streaming host found", Level.PASS, info)
             } else {
-                Check("Sunshine found", Level.WARN, "No answer from http://$host:47989/serverinfo")
+                Check("Streaming host found", Level.WARN, "No answer from http://$host:47989/serverinfo")
             }
             checks = results.toList()
 
             val port = NetProbe.SUNSHINE_TCP_PORTS.firstOrNull { open[it] == true }
             if (port == null) {
-                results += Check("Latency", Level.FAIL, "Can't measure: no Sunshine port is reachable")
+                results += Check("Latency", Level.FAIL, "Can't measure: no Apollo port is reachable")
             } else {
                 phase = "Measuring latency to $host:$port"
                 val totalMs = durationSec * 1000L
@@ -447,7 +447,7 @@ fun TesterScreen(onKeepScreenOn: (Boolean) -> Unit) {
         }
 
         // ---- Moonlight advice
-        SectionHeader("Moonlight settings for this phone")
+        SectionHeader("Artemis settings for this phone")
         SteamCard {
             SettingRow("Resolution", advice.resolution)
             SettingRow("Frame rate", "${advice.fps} fps")
@@ -468,7 +468,7 @@ fun TesterScreen(onKeepScreenOn: (Boolean) -> Unit) {
         OutlinedTextField(
             value = host,
             onValueChange = { host = it.trim() },
-            label = { Text("PC address (Sunshine)") },
+            label = { Text("PC address") },
             singleLine = true,
             enabled = !running,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
@@ -551,7 +551,7 @@ fun TesterScreen(onKeepScreenOn: (Boolean) -> Unit) {
         }
 
         Text(
-            "Holds the same Wi-Fi locks as Moonlight during the test.",
+            "Holds the same Wi-Fi locks as Artemis/Moonlight during the test.",
             color = Muted.copy(alpha = 0.6f), fontSize = 11.sp,
             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
             textAlign = TextAlign.Center,
@@ -811,11 +811,11 @@ private fun controllerCheck(list: List<ControllerInfo>): Check =
 private fun portCheck(open: Map<Int, Boolean>): Check {
     val list = open.entries.joinToString { "${it.key} ${if (it.value) "open" else "closed"}" }
     return when {
-        open.values.all { it } -> Check("Sunshine ports", Level.PASS, list)
-        open.values.any { it } -> Check("Sunshine ports", Level.WARN, list)
+        open.values.all { it } -> Check("Host ports", Level.PASS, list)
+        open.values.any { it } -> Check("Host ports", Level.WARN, list)
         else -> Check(
-            "Sunshine ports", Level.FAIL,
-            "$list. Is Sunshine running? Run Firewall-Setup.cmd on the PC.",
+            "Host ports", Level.FAIL,
+            "$list. Is Apollo running? Run the Test Kit on the PC (it sets up the firewall).",
         )
     }
 }
