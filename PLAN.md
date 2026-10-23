@@ -186,6 +186,23 @@ Positioning: Artemis is a powerful client for experts; **OphiStreamer is a compl
 
 ---
 
+## 2c-ux. Experience roadmap from pro apps (researched 2026-10-23)
+
+What Razer Nexus, Backbone, Steam Link and Xbox/PlayStation Remote Play do that we should match or beat:
+
+| Pro pattern (source) | OphiStreamer plan |
+|---|---|
+| **Controller is the entry point**: Razer Nexus opens automatically when the Kishi connects and quits when it disconnects; a dedicated button opens the launcher (Nexus, Backbone). | **Plug in and play**: OphiStreamer opens on Home when the GameSir is plugged in (USB attach filter on its vendor/product ID, read from Connection > Show details), Play already focused. |
+| **Network test on first connection with recommended settings**, re-runnable (Steam Link). | Done (Connection auto-applies). Next: run it automatically on first launch and when the network changes. |
+| **Onboarding** before the first stream (all of them). | **3-step first-run**: 1) hotspot on 5 GHz (opens the setting), 2) PC app installed + automatic pairing, 3) Connection check. |
+| **Wake / sleep handling**: consoles must be in Sleep to wake remotely (Xbox). Laptops can't be reliably woken over Wi-Fi. | **Keep the laptop awake** while Gaming mode is on and a phone is connected (PC app, `SetThreadExecutionState`), lid-close tip in the window. |
+| **Game backgrounds and a favourites row** (Nexus 3.0). | Last game's box art as the Home hero background; favourites row on the shelf. |
+| **Wi-Fi lock while streaming** (Steam Link). | Done (inherited from Moonlight/Artemis, also used by Connection). |
+| **Input blocked while the device sleeps** (Nexus). | Ignore controller input when the screen is off outside a stream. |
+| Connection-quality cue during play (Steam Link/GeForce NOW style). | Small SteamOS-style quality icon in-stream instead of text warnings; **session summary card** on Home after each stream (time played, delay, hiccups), feeding session learning. |
+
+---
+
 ## 2c-bed. Bed mode (designed 2026-10-23)
 
 Use case: lying in bed in a dark room, phone in the GameSir, laptop elsewhere with its screen off (Apollo virtual display). Honor X7d has an **LCD**, so dark colors don't save power and its lowest system brightness can still be harsh in the dark.
