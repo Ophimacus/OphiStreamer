@@ -39,6 +39,8 @@ param(
     # PhoneHotspot = phone hosts, laptop joins (default). LaptopHotspot = laptop hosts.
     [ValidateSet('PhoneHotspot', 'LaptopHotspot')]
     [string]$Mode = 'PhoneHotspot',
+    # Skip the "press Enter once connected" prompt (m0-start.ps1 already joined the hotspot).
+    [switch]$AssumeConnected,
     # Seconds per latency phase. Windows scans roughly once a minute, so keep this >= 90.
     [int]$LagSeconds = 90,
     [switch]$SkipLagTest,
@@ -532,7 +534,7 @@ try {
         Write-Host '  1. Phone: Settings > Mobile network > Personal hotspot > More > AP band = 5 GHz.' -ForegroundColor White
         Write-Host '  2. Turn the phone hotspot on (mobile data can stay off).' -ForegroundColor White
         Write-Host '  3. Connect this laptop to it from the Windows Wi-Fi menu.' -ForegroundColor White
-        $null = Read-Host '  Press Enter once the laptop is connected to the phone'
+        if (-not $AssumeConnected) { $null = Read-Host '  Press Enter once the laptop is connected to the phone' }
         $wl = $null
         $deadline = (Get-Date).AddSeconds(60)
         do {

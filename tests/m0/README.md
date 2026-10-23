@@ -29,7 +29,19 @@ Two modes (see PLAN.md):
 - Check the Sunshine log says it's using **NVENC** (the NVIDIA GPU), not the Intel iGPU.
 - **ViGEmBus** installed so the controller reaches games. The test checks this.
 
-## Run (phone hotspot)
+## One-click run (recommended)
+1. Phone: turn the hotspot on (band already set to 5 GHz).
+2. Laptop, in a normal PowerShell window (not admin), paste:
+   ```
+   irm https://raw.githubusercontent.com/Ophimacus/OphiStreamer/main/tests/m0/get.ps1 | iex
+   ```
+   It downloads the latest kit to `%USERPROFILE%\OphiStreamer-m0` and starts it. Next time, just double-click **`Start-Test.cmd`** in that folder.
+3. Answer the prompts: hotspot name and password (first time only), one admin prompt (first time only), then the test runs by itself.
+4. Phone: open **Link Check** → **Run link test** → **Copy report**. Send both reports back.
+
+If Windows hides the Wi-Fi name (Windows 11 24H2+), turn on Settings → Privacy & security → Location → **Let desktop apps access your location**.
+
+## Manual run (phone hotspot)
 1. Turn on the phone hotspot and connect the laptop to it.
 2. Double-click **`Firewall-Setup.cmd`** and approve the admin prompt (Sunshine allowed on the local network only).
 3. Pin the phone network so Windows never hops away mid-game and treats it as metered. From a command prompt in this folder, using the Wi-Fi name the laptop shows:

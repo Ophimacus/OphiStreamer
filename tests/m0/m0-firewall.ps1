@@ -28,7 +28,9 @@
 param(
     [switch]$Remove,
     [string]$SunshinePath,
-    [string]$PinNetwork
+    [string]$PinNetwork,
+    # Close without "Press Enter" (used by m0-start.ps1).
+    [switch]$NoPause
 )
 
 $ErrorActionPreference = 'Stop'
@@ -40,6 +42,7 @@ if (-not $isAdmin) {
     if ($Remove) { $relaunch += '-Remove' }
     if ($SunshinePath) { $relaunch += @('-SunshinePath', "`"$SunshinePath`"") }
     if ($PinNetwork) { $relaunch += @('-PinNetwork', "`"$PinNetwork`"") }
+    if ($NoPause) { $relaunch += '-NoPause' }
     Start-Process powershell.exe -Verb RunAs -ArgumentList $relaunch
     exit
 }
@@ -107,6 +110,8 @@ catch {
     Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
 }
 finally {
-    Write-Host ''
-    Read-Host 'Press Enter to close'
+    if (-not $NoPause) {
+        Write-Host ''
+        Read-Host 'Press Enter to close'
+    }
 }
