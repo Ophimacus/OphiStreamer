@@ -32,14 +32,16 @@ public partial class MainWindow : Window
 
     private readonly ApolloClient _apollo;
     private readonly PhoneLink _phoneLink;
+    private readonly ScreenSwitch _screen;
 
-    public MainWindow(SessionController session, AppSettings settings, ApolloClient apollo, PhoneLink phoneLink)
+    public MainWindow(SessionController session, AppSettings settings, ApolloClient apollo, PhoneLink phoneLink, ScreenSwitch screen)
     {
         InitializeComponent();
         _session = session;
         _settings = settings;
         _apollo = apollo;
         _phoneLink = phoneLink;
+        _screen = screen;
         TestApolloBtn.Click += async (_, _) =>
         {
             SaveSettings();
@@ -178,6 +180,11 @@ public partial class MainWindow : Window
                 : new Check("Laptop stays awake", "Off", CheckLevel.Off, "Turns on with Gaming mode"),
             new Check("Drops this session", _session.DropsThisSession.ToString(),
                 _session.DropsThisSession == 0 ? CheckLevel.Good : CheckLevel.Warn, "Reconnects automatically"),
+            _settings.PhoneOnlyScreen || _screen.Switched
+                ? new Check("Laptop screen", _screen.Switched ? "Off while streaming" : "On",
+                    _screen.Switched ? CheckLevel.Good : CheckLevel.Off,
+                    _screen.Switched ? "Comes back when the phone disconnects. Win+P also works." : _screen.Status)
+                : new Check("Laptop screen", "Stays on", CheckLevel.Off, "Settings: show the game only on my phone"),
             _phoneLink.StartError != null
                 ? new Check("Phone link", "Blocked", CheckLevel.Bad, $"Port {PhoneLink.Port}: {_phoneLink.StartError}")
                 : _apollo.HasCredentials
@@ -262,6 +269,7 @@ public partial class MainWindow : Window
     {
         SsidBox.Text = _settings.PhoneSsid ?? _session.Link.Ssid ?? "";
         AutoBox.IsChecked = _settings.AutoGamingMode;
+        PhoneOnlyBox.IsChecked = _settings.PhoneOnlyScreen;
         StartupBox.IsChecked = _settings.StartWithWindows;
         ApolloUserBox.Text = _settings.ApolloUser ?? "";
         ApolloPassBox.Password = _settings.ApolloPassword ?? "";
@@ -272,10 +280,12 @@ public partial class MainWindow : Window
     {
         _settings.PhoneSsid = string.IsNullOrWhiteSpace(SsidBox.Text) ? null : SsidBox.Text.Trim();
         _settings.AutoGamingMode = AutoBox.IsChecked == true;
+        _settings.PhoneOnlyScreen = PhoneOnlyBox.IsChecked == true;
         _settings.StartWithWindows = StartupBox.IsChecked == true;
         _settings.ApolloUser = string.IsNullOrWhiteSpace(ApolloUserBox.Text) ? null : ApolloUserBox.Text.Trim();
         _settings.ApolloPassword = string.IsNullOrEmpty(ApolloPassBox.Password) ? null : ApolloPassBox.Password;
         _settings.Save();
+        _screen.SettingChanged();
         SavedText.Foreground = Good;
         SavedText.Text = "Saved.";
         Refresh();

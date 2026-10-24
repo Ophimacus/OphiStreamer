@@ -17,6 +17,7 @@ public partial class App : System.Windows.Application
     private EventWaitHandle? _showSignal;
     private SessionController? _session;
     private PhoneLink? _phoneLink;
+    private ScreenSwitch? _screen;
     private MainWindow? _window;
     private Forms.NotifyIcon? _tray;
     private Forms.ToolStripMenuItem? _trayToggle;
@@ -51,7 +52,8 @@ public partial class App : System.Windows.Application
         var apollo = new ApolloClient(settings);
         _phoneLink = new PhoneLink(_session, apollo);
         _phoneLink.Start();
-        _window = new MainWindow(_session, settings, apollo, _phoneLink);
+        _screen = new ScreenSwitch(settings);
+        _window = new MainWindow(_session, settings, apollo, _phoneLink, _screen);
         _iconOn = MakeIcon(Color.FromArgb(0x59, 0xBF, 0x40));
         _iconOff = MakeIcon(Color.FromArgb(0x8B, 0x98, 0xA5));
         _window.Icon = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
@@ -139,6 +141,7 @@ public partial class App : System.Windows.Application
     private void ExitApp()
     {
         _phoneLink?.Dispose();
+        _screen?.Dispose(); // laptop screen back on before we go
         _session?.Dispose();
         if (_tray != null)
         {

@@ -162,6 +162,13 @@
               <CheckBox x:Name="AutoBox" Style="{StaticResource Check}" Content="Turn on Gaming mode automatically on the phone hotspot" Margin="0,12,0,0"/>
             </StackPanel>
           </Border>
+          <TextBlock Style="{StaticResource Caption}" Text="SCREEN"/>
+          <Border Style="{StaticResource CardBorder}" Padding="16,12">
+            <StackPanel>
+              <CheckBox x:Name="PhoneOnlyBox" Style="{StaticResource Check}" Content="Show the game only on my phone"/>
+              <TextBlock Text="Turns the laptop screen off while the phone streams, like Win+P &gt; Second screen only. It comes back by itself when the phone disconnects, and when OphiStreamer closes." FontSize="12" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="28,4,0,0"/>
+            </StackPanel>
+          </Border>
           <TextBlock Style="{StaticResource Caption}" Text="APOLLO (FOR PHONE PAIRING AND REPAIR)"/>
           <Border Style="{StaticResource CardBorder}" Padding="16,12">
             <StackPanel>

@@ -13,6 +13,13 @@ public sealed class AppSettings
     public bool AutoGamingMode { get; set; } = true;
     public bool StartWithWindows { get; set; } = true;
 
+    /// <summary>Show the game only on the phone while it streams (laptop screen off). Off by default.</summary>
+    public bool PhoneOnlyScreen { get; set; }
+    /// <summary>Set while the laptop screen is off because of <see cref="PhoneOnlyScreen"/>, so a crash can be undone on next start.</summary>
+    public bool ScreenSwitched { get; set; }
+    /// <summary>Win+P layout to go back to (1 laptop only, 2 duplicate, 4 extend).</summary>
+    public int ScreenRestoreTopology { get; set; }
+
     /// <summary>Apollo web-panel login, used for PIN-free pairing and Repair.</summary>
     public string? ApolloUser { get; set; }
 
@@ -61,10 +68,21 @@ public sealed class AppSettings
         return new AppSettings();
     }
 
+    private static readonly object SaveLock = new();
+
     public void Save()
     {
-        Directory.CreateDirectory(Folder);
-        File.WriteAllText(FilePath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+        // Saved from the UI and from the screen switch's timer; never let a file clash crash the app.
+        lock (SaveLock)
+        {
+            try
+            {
+                Directory.CreateDirectory(Folder);
+                File.WriteAllText(FilePath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
         ApplyStartWithWindows();
     }
 
