@@ -59,6 +59,12 @@ if ((Get-Service ApolloService -ErrorAction SilentlyContinue) -and (Get-Service 
     Stop-Service SunshineService -Force -ErrorAction SilentlyContinue
     Set-Service SunshineService -StartupType Disabled -ErrorAction SilentlyContinue
 }
+# Apollo may have been installed earlier and left Stopped/Manual, or started while Sunshine held the ports.
+if (Get-Service ApolloService -ErrorAction SilentlyContinue) {
+    Step 'Starting Apollo'
+    Set-Service ApolloService -StartupType Automatic -ErrorAction SilentlyContinue
+    Restart-Service ApolloService -Force -ErrorAction SilentlyContinue
+}
 
 # ---------------------------------------------------------------- firewall (local network only)
 Step 'Firewall rules'

@@ -14,7 +14,7 @@ namespace OphiStreamer.Core;
 /// </summary>
 public sealed class ApolloClient
 {
-    private const string BaseUrl = "https://localhost:47990";
+    private const string BaseUrl = "https://127.0.0.1:47990";
     private readonly AppSettings _settings;
     private readonly HttpClient _http;
     private bool _loggedIn;
@@ -71,7 +71,7 @@ public sealed class ApolloClient
                 if (!resp.IsSuccessStatusCode) return $"Apollo answered {(int)resp.StatusCode}";
                 var text = await resp.Content.ReadAsStringAsync();
                 // /api/pin answers {"status": true|false}
-                if (text.Contains("\"status\":false") || text.Contains("\"status\": false")) return "Apollo rejected it (no pairing in progress?)";
+                if (Rejected(text)) return "Apollo rejected it (no pairing in progress?)";
                 return null;
             }
             catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
@@ -101,4 +101,20 @@ public sealed class ApolloClient
 
     private static StringContent Json(object body) =>
         new(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+
+    /// <summary>{"status": false} or, from older builds, {"status": "false"}.</summary>
+    private static bool Rejected(string text)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(text);
+            if (!doc.RootElement.TryGetProperty("status", out var st)) return false;
+            return st.ValueKind == System.Text.Json.JsonValueKind.False
+                || (st.ValueKind == System.Text.Json.JsonValueKind.String && st.GetString() == "false");
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+    }
 }

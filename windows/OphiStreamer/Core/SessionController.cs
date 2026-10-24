@@ -28,6 +28,7 @@ public sealed class SessionController : IDisposable
     private bool _userTurnedOff;
     private int _drops;
     private int _busy;
+    private bool _disposed;
 
     public event Action? Changed;
 
@@ -109,6 +110,7 @@ public sealed class SessionController : IDisposable
             var link = WifiLink.Read();
             lock (_lock)
             {
+                if (_disposed) return;
                 var was = Link;
                 Link = link;
 
@@ -184,7 +186,11 @@ public sealed class SessionController : IDisposable
     public void Dispose()
     {
         _timer.Dispose();
-        lock (_lock) Disable("app closed");
+        lock (_lock)
+        {
+            _disposed = true;
+            Disable("app closed");
+        }
         _lagFix.Dispose();
         _keepAlive.Dispose();
     }

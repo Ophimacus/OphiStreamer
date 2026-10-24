@@ -71,11 +71,13 @@ public sealed class PhoneLink : IDisposable
             client.SendTimeout = 5000;
             var remote = (client.Client.RemoteEndPoint as IPEndPoint)?.Address;
             using var stream = client.GetStream();
+            // Socket timeouts don't apply to async reads; this does. Speed tests use their own connection.
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             int status = 200;
             object body;
             try
             {
-                var (method, path, payload) = await ReadRequest(stream);
+                var (method, path, payload) = await ReadRequest(stream, timeout.Token);
                 (status, body) = await Route(method, path, payload, remote);
             }
             catch (Exception e)
@@ -86,8 +88,12 @@ public sealed class PhoneLink : IDisposable
             var json = JsonSerializer.Serialize(body);
             var bytes = Encoding.UTF8.GetBytes(json);
             var head = $"HTTP/1.1 {status} {(status == 200 ? "OK" : "Error")}\r\nContent-Type: application/json\r\nContent-Length: {bytes.Length}\r\nConnection: close\r\n\r\n";
-            await stream.WriteAsync(Encoding.ASCII.GetBytes(head));
-            await stream.WriteAsync(bytes);
+            try
+            {
+                await stream.WriteAsync(Encoding.ASCII.GetBytes(head), timeout.Token);
+                await stream.WriteAsync(bytes, timeout.Token);
+            }
+            catch (OperationCanceledException) { }
         }
     }
 
@@ -218,13 +224,13 @@ public sealed class PhoneLink : IDisposable
         return seq;
     }
 
-    private static async Task<(string, string, JsonElement?)> ReadRequest(Stream stream)
+    private static async Task<(string, string, JsonElement?)> ReadRequest(Stream stream, CancellationToken ct)
     {
         var buffer = new byte[MaxBody + 4096];
         int read = 0, headerEnd = -1;
         while (headerEnd < 0)
         {
-            int n = await stream.ReadAsync(buffer.AsMemory(read, buffer.Length - read));
+            int n = await stream.ReadAsync(buffer.AsMemory(read, buffer.Length - read), ct);
             if (n == 0) throw new IOException("closed");
             read += n;
             headerEnd = IndexOf(buffer, read, "\r\n\r\n"u8);
@@ -242,7 +248,7 @@ public sealed class PhoneLink : IDisposable
         int bodyStart = headerEnd + 4;
         while (read - bodyStart < length)
         {
-            int n = await stream.ReadAsync(buffer.AsMemory(read, buffer.Length - read));
+            int n = await stream.ReadAsync(buffer.AsMemory(read, buffer.Length - read), ct);
             if (n == 0) break;
             read += n;
         }

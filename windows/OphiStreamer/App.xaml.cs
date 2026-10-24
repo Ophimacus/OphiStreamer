@@ -64,7 +64,8 @@ public partial class App : System.Windows.Application
         {
             if (args.Mode == PowerModes.Suspend) _session.OnSuspend();
         };
-        SystemEvents.SessionEnding += (_, _) => _session.Dispose();
+        // Only restore Wi-Fi here: the logoff can still be cancelled, and the app must keep working if it is.
+        SystemEvents.SessionEnding += (_, _) => _session.OnSuspend();
 
         // Developer check: "--screenshot <file.png>" renders the window to a PNG and exits.
         int shot = Array.IndexOf(e.Args, "--screenshot");

@@ -25,6 +25,7 @@ public sealed class KeepAlive : IDisposable
     private readonly Queue<(DateTime At, double? Ms)> _samples = new();
     private Thread? _thread;
     private volatile bool _running;
+    private volatile int _generation;
     private volatile string? _target;
 
     public string? Target
@@ -38,7 +39,8 @@ public sealed class KeepAlive : IDisposable
         _target = target;
         if (_running) return;
         _running = true;
-        _thread = new Thread(Loop) { IsBackground = true, Name = "OphiStreamer keep-alive" };
+        int gen = ++_generation;
+        _thread = new Thread(() => Loop(gen)) { IsBackground = true, Name = "OphiStreamer keep-alive" };
         _thread.Start();
     }
 
@@ -65,10 +67,11 @@ public sealed class KeepAlive : IDisposable
         }
     }
 
-    private void Loop()
+    private void Loop(int gen)
     {
         using var ping = new Ping();
-        while (_running)
+        // An older thread from before a quick Stop/Start exits on its next pass.
+        while (_running && gen == _generation)
         {
             var target = _target;
             if (target != null)
