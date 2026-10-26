@@ -151,7 +151,8 @@
         </Grid>
 
         <!-- Settings page -->
-        <StackPanel x:Name="SettingsPage" Grid.Column="1" Visibility="Collapsed" Margin="18,16">
+        <ScrollViewer x:Name="SettingsPage" Grid.Column="1" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="18,16">
           <TextBlock Text="Settings" FontSize="22" FontWeight="SemiBold"/>
           <TextBlock Style="{StaticResource Caption}" Text="PHONE"/>
           <Border Style="{StaticResource CardBorder}" Padding="16,12">
@@ -180,13 +181,29 @@
               <Button x:Name="TestApolloBtn" Style="{StaticResource Secondary}" Content="Save and test login" HorizontalAlignment="Left"/>
             </StackPanel>
           </Border>
+          <TextBlock Style="{StaticResource Caption}" Text="TWO-PHONE CO-OP"/>
+          <Border Style="{StaticResource CardBorder}" Padding="16,12">
+            <StackPanel>
+              <CheckBox x:Name="CoopBox" Style="{StaticResource Check}" Content="Allow two phones (co-op)"/>
+              <TextBlock Text="Pair phone 2 manually in Apollo first. Select the guest below, then Apply. The guest can view the current game and use a controller, but cannot launch or end games. Host settings and custom commands are preserved." FontSize="12" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,8,0,8"/>
+              <ComboBox x:Name="CoopGuestBox" DisplayMemberPath="Label" Margin="0,0,0,8"/>
+              <StackPanel Orientation="Horizontal">
+                <Button x:Name="RefreshCoopClientsBtn" Style="{StaticResource Secondary}" Content="Refresh paired phones" Margin="0,0,8,0"/>
+                <Button x:Name="ApplyCoopBtn" Style="{StaticResource Secondary}" Content="Apply co-op"/>
+              </StackPanel>
+              <TextBlock Text="Disconnect the guest before Apply. Uncheck and Apply to restore its previous permissions. Apply takes effect without restarting Apollo. Co-op capacity is an app preference; Apollo can support more sessions. Other phones do not gain PC control through OphiStreamer." FontSize="12" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+              <TextBlock x:Name="CoopPresenceText" FontSize="12" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+              <TextBlock x:Name="CoopResultText" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0"/>
+            </StackPanel>
+          </Border>
           <TextBlock Style="{StaticResource Caption}" Text="APP"/>
           <Border Style="{StaticResource CardBorder}" Padding="16,12">
             <CheckBox x:Name="StartupBox" Style="{StaticResource Check}" Content="Start OphiStreamer with Windows (in the tray)"/>
           </Border>
           <Button x:Name="SaveBtn" Style="{StaticResource Primary}" Content="SAVE" Margin="0,18,0,0" Width="200" HorizontalAlignment="Left"/>
-          <TextBlock x:Name="SavedText" Foreground="#59BF40" FontSize="12" Margin="0,8,0,0"/>
+          <TextBlock x:Name="SavedText" Foreground="#59BF40" FontSize="12" Margin="0,8,0,0" TextWrapping="Wrap"/>
         </StackPanel>
+        </ScrollViewer>
       </Grid>
     </Grid>
   </Border>

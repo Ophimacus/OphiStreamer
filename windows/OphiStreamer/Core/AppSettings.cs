@@ -15,6 +15,12 @@ public sealed class AppSettings
 
     /// <summary>Show the game only on the phone while it streams (laptop screen off). Off by default.</summary>
     public bool PhoneOnlyScreen { get; set; }
+    /// <summary>Last acknowledged co-op opt-in. Only explicit Apply changes the selected Apollo guest.</summary>
+    public bool CoopEnabled { get; set; }
+    public string? CoopGuestUuid { get; set; }
+    /// <summary>Full original client record, persisted before modifying permissions. Commands are preserved.</summary>
+    public string? CoopGuestBackupJson { get; set; }
+    public bool CoopApplyPending { get; set; }
     /// <summary>Set while the laptop screen is off because of <see cref="PhoneOnlyScreen"/>, so a crash can be undone on next start.</summary>
     public bool ScreenSwitched { get; set; }
     /// <summary>Win+P layout to go back to (1 laptop only, 2 duplicate, 4 extend).</summary>
@@ -70,6 +76,18 @@ public sealed class AppSettings
 
     private static readonly object SaveLock = new();
 
+    /// <summary>Durable co-op recovery state; propagate errors and do not change Windows startup.</summary>
+    public void SaveCoopState()
+    {
+        lock (SaveLock)
+        {
+            Directory.CreateDirectory(Folder);
+            var temp = FilePath + ".tmp";
+            File.WriteAllText(temp, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+            File.Move(temp, FilePath, overwrite: true);
+        }
+    }
+
     public void Save()
     {
         // Saved from the UI and from the screen switch's timer; never let a file clash crash the app.
@@ -77,8 +95,8 @@ public sealed class AppSettings
         {
             try
             {
-                Directory.CreateDirectory(Folder);
-                File.WriteAllText(FilePath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+                // Keep the co-op recovery backup intact even if a routine save is interrupted.
+                SaveCoopState();
             }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }

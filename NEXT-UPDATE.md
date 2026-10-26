@@ -1,66 +1,55 @@
-# Next update: two phones, one laptop (couch co-op)
+# Two-phone co-op and session learning
 
-Status: planned, not started. Build after the current test round (stage 4, installer, screen switch, new on-screen buttons) is reported.
+Status: implementation in progress. No new public release until builds and policy tests pass.
 
-## Goal
+## Verified Apollo behaviour
 
-One laptop streams one game to two phones at once. Both phones show the same picture. Each phone's controller is its own player (player 1 and player 2), for split-screen and couch co-op games.
+Apollo v0.4.6 and upstream support multiple clients resuming the same running game. There is no `channels` setting in these Apollo config parsers; the earlier plan to set `channels=2` was incorrect.
 
-Out of scope: two different games at once, one per phone. Apollo streams a single Windows desktop, so that would need two Windows sessions or virtual machines, which is too heavy for the GTX 1050 Ti.
+Each stream has a separate input context; Apollo allocates virtual controllers from a global pool. Do not shift controller numbers in Android. Player order depends on connect order, existing PC controllers, and the game. A physical two-phone co-op test is still required.
 
-## Step 0: manual test first (no code)
+References checked against upstream commit adc5c5a0bd80831ce495434bb16aee2cd4175fb8:
+- https://github.com/ClassicOldSong/Apollo/blob/adc5c5a0bd80831ce495434bb16aee2cd4175fb8/src/nvhttp.cpp
+- https://github.com/ClassicOldSong/Apollo/blob/adc5c5a0bd80831ce495434bb16aee2cd4175fb8/src/input.cpp
+- https://github.com/ClassicOldSong/Apollo/blob/adc5c5a0bd80831ce495434bb16aee2cd4175fb8/src/confighttp.cpp
 
-Before building anything, confirm Apollo does what we need on the Acer:
+## Windows co-op setup
 
-1. In Apollo's web panel (https://localhost:47990): Configuration > Advanced > set `channels` to 2. Save and restart Apollo.
-2. Phone 2 joins phone 1's 5 GHz hotspot. Pair phone 2 in Artemis or OphiStreamer.
-3. In Apollo > Clients, give phone 2 the input permissions: controller, and touch/mouse if wanted. New clients only get "view streams" and "list apps" by default.
-4. Start a game on phone 1, then connect phone 2 to the same game.
-5. Check and write down:
-   - [ ] Both phones show the picture.
-   - [ ] Each GameSir moves a different player in a co-op game. If both move player 1, this whole plan needs a different approach.
-   - [ ] Picture shape on phone 2. Apollo's virtual display uses phone 1's resolution, so a different phone gets black bars.
-   - [ ] Smoothness on both phones, and phone 1's heat and battery, since it carries the hotspot plus its own stream.
-   - [ ] Laptop encoder load at 720p and at 1080p.
+1. Pair the second phone manually in Apollo using its PIN. Existing phone-link trust is not widened to the whole subnet.
+2. In OphiStreamer Settings, refresh paired phones, select the guest by its Apollo UUID, and explicitly apply co-op mode. Disconnect the guest before changing permissions.
+3. Guest permissions are list apps + view + controller (50331904), without launch/quit, keyboard, or mouse. Disable the guest's forced virtual display so both share the existing capture.
+4. Back up the complete original guest record before changing it. Read back to verify. Restore on explicit disable; if settings changed externally, stop and ask the user to resolve the conflict rather than overwriting them.
+5. Show actual connected-client count from Apollo's local authenticated API. Keep the laptop screen off while another stream remains; restore after the last stream ends. Unknown/stale count is not reported as zero.
 
-The result decides what we build. Everything below assumes separate controllers work.
+Co-op mode describes supported app behaviour, not a hard server limit: Apollo may accept additional clients independently. No automatic Apollo restart or full config rewrite is needed.
 
-## What to build
+## Phone experience
 
-### Laptop app (Windows)
+- Role setting: host phone or co-op guest. Guest setup joins the first phone's hotspot instead of creating another one.
+- Guest Home action is Join game. It refuses when no host game is running and never falls back to launching or quitting another game if the host changes games during connection.
+- Guest disconnect leaves the game running. Quit, clipboard and advanced PC-command actions are hidden in the guest menu; Apollo permissions enforce the important restrictions at the host.
+- Guest does not request another virtual display. Co-op uses per-stream 720p/60, SDR, and at most 8 Mbps per phone (metered and unmetered); saved solo preferences remain intact.
+- Touch controls stay automatic per phone. Controller role is not labelled P1/P2 as a guarantee.
+- Start the host first, wait for video, then join the guest. Apollo has one pending handshake slot, so avoid starting both simultaneously.
 
-- **Trusted phones list.** Today the phone link only trusts the Wi-Fi gateway, which is the phone running the hotspot. Phone 2 is not the gateway, so its pairing without a PIN, Repair and calibration are refused.
-  - Add a list of trusted phones: phone 1 (the gateway) plus phones approved once from the laptop app with a "Phone 2 wants to connect: Allow?" notice.
-  - Remember each phone by its pairing name and the certificate Apollo issued it, not by IP address, because the hotspot can hand out new addresses.
-- **Two-phone switch in Settings:** "Let a second phone join (co-op)". When turned on, it:
-  - Sets Apollo `channels` to 2 through Apollo's web API, and back to 1 when turned off.
-  - Grants the second phone controller input permission in Apollo automatically after pairing, so nobody has to open Apollo's web panel.
-- **Screen switch** ("show the game only on my phone"): turn the laptop screen back on only when *both* phones have disconnected, not when the first one leaves.
-- **Main page:** show "Phones: 2 connected" with each phone's name and its connection quality.
-- **Keep-alive / lag fix:** check that Wi-Fi tuning and keep-alive pings work with two phones. Ping both.
-- **Connection log:** record which phone joined and left, and when.
+## Session learning
 
-### Phone app (Android)
+- Opt-in, local-only reports, scoped by PC, hashed network signature, metered state and solo/shared-host/guest role.
+- Bounded history: up to 24 scopes, 8 reports each. Reset clears history and disables learning.
+- Uses delivered/missing video-frame counters, connected duration and observed decoder averages. Frame loss is not presented as packet loss or displayed FPS.
+- Recommendations need two qualifying sessions at matching settings, each at least 2 minutes and 300 delivered frames, with recent evidence. Exclude network changes and counter discontinuities.
+- Repeated network-frame loss can recommend a lower bitrate; repeated decoder delay beyond the frame budget can recommend lower FPS.
+- No automatic quality increases, codec guesses or mid-session changes. A player can accept a reduction for the next matching stream, cancel it, or keep manual settings. Saved solo settings are not overwritten.
 
-- **Join as player 2.** On Home, when the laptop is already streaming to another phone, the Play button reads "Join game (player 2)" instead of starting a new game. It joins the running session rather than launching or quitting anything.
-- **Joining without a hotspot of its own.** Phone 2 joins phone 1's hotspot. The first-run setup needs a branch: "Is this the phone with the hotspot?" If not, skip the hotspot step and show "Join the other phone's hotspot".
-- **In-stream menu.** On phone 2, hide "Quit game", or make it ask first, so player 2 can't close the game on player 1. "Disconnect" leaves only phone 2.
-- **Player badge.** Show a small "P1" or "P2" badge for a few seconds when the stream starts, so each person knows which player they are.
-- **Touch controls.** Auto mode works per phone, so phone 2 can use touch controls while phone 1 uses its GameSir.
-- **Quality.** If two phones share the hotspot, the connection check and calibration should suggest a lower bitrate for each phone, about 60%, so the hotspot isn't overloaded.
+## Acceptance test before public release
 
-## Risks and open questions
+- Host starts a co-op game; guest joins the same picture; each controller controls a different player.
+- Test physical controllers, touch controls, and mixed control on both devices.
+- Guest cannot close or replace the game, including from alternate entry points.
+- Guest disconnect leaves host streaming. Host disconnect while guest remains does not prematurely restore screen topology; last disconnect restores it.
+- Reconnect both phones sequentially; verify player assignments in the game after reconnect.
+- Two clean sessions do not trigger reductions. Two qualifying bad sessions produce an explainable recommendation; applying it affects only the next matching stream.
+- A manual setting change, disabled learning, reset, different PC/network or different role prevents an old queued change applying.
+- Verify fresh install, update, and co-op disable/restoration. Test heat and encoder load on the Acer and hotspot phone.
 
-- Whether Apollo gives each client its own controller. This is the main unknown, which is why step 0 comes first.
-- The hotspot phone's heat and battery with two streams. Suggest keeping phone 1 charging.
-- Different phone screen shapes mean black bars on phone 2, which is acceptable for co-op.
-- 1080p/120 to two phones may be too much for the GTX 1050 Ti's encoder. Default to 720p when two phones are connected.
-- Apollo's per-client permissions API needs checking on the installed Apollo version before automating it.
-
-## Done when
-
-- Two Honor phones (or any two phones) on phone 1's hotspot both stream the same game smoothly at 720p.
-- Each GameSir controls a different player.
-- Phone 2 pairs without typing a PIN after one "Allow" on the laptop.
-- The laptop screen comes back only after both phones disconnect.
-- Nothing changes for someone using one phone. The two-phone switch is off by default.
+Deferred: an authenticated encrypted trusted-phone enrollment service for automatic guest pairing; durable player-slot assignment (game/host dependent); session-based automatic quality increases.

@@ -16,6 +16,7 @@ public sealed class ScreenSwitch : IDisposable
     private static readonly TimeSpan Tick = TimeSpan.FromSeconds(2);
 
     private readonly AppSettings _settings;
+    private readonly Func<int?> _activeStreams;
     private readonly Timer _timer;
     private readonly object _lock = new();
     private int _seenTicks;
@@ -29,9 +30,10 @@ public sealed class ScreenSwitch : IDisposable
     public bool Switched => _settings.ScreenSwitched;
     public bool VirtualDisplayActive { get; private set; }
 
-    public ScreenSwitch(AppSettings settings)
+    public ScreenSwitch(AppSettings settings, Func<int?>? activeStreams = null)
     {
         _settings = settings;
+        _activeStreams = activeStreams ?? (() => null);
         // Recover from a crash or power loss while the laptop screen was off.
         if (_settings.ScreenSwitched && !Displays.AnyVirtualActive(out _))
         {
@@ -51,12 +53,16 @@ public sealed class ScreenSwitch : IDisposable
                 EventLog.Write(virt ? "virtual_display_on" : "virtual_display_off", names);
             }
             VirtualDisplayActive = virt;
+            // Apollo may retain its virtual desktop after one client leaves. Use its actual
+            // session count, never the first phone's Wi-Fi presence, to decide when to restore.
+            int? activeStreams = _activeStreams();
+            bool sessionsEnded = activeStreams == 0;
 
-            if (!virt)
+            if (!virt || sessionsEnded)
             {
                 _seenTicks = 0;
                 _handledThisStream = false;
-                if (_settings.ScreenSwitched) Restore("phone disconnected");
+                if (_settings.ScreenSwitched) Restore(!virt ? "virtual display removed" : "last stream disconnected");
             }
             else if (_settings.PhoneOnlyScreen && !_handledThisStream)
             {
@@ -98,7 +104,8 @@ public sealed class ScreenSwitch : IDisposable
         int err = Displays.Apply(topo);
         // If the remembered layout can't be applied (a monitor was unplugged), the laptop screen alone always can.
         if (err != 0 && topo != Displays.TopologyInternal) err = Displays.Apply(Displays.TopologyInternal);
-        _settings.ScreenSwitched = false;
+        // Keep recovery armed if Windows failed; the next tick/start must retry.
+        if (err == 0) _settings.ScreenSwitched = false;
         _settings.Save();
         EventLog.Write("screen_restored", err == 0 ? why : $"{why}, error {err}");
     }

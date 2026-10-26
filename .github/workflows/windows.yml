@@ -21,6 +21,9 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
+      - name: Check co-op permission and restoration policies
+        run: dotnet run --project windows/OphiStreamer.Coop.Tests/OphiStreamer.Coop.Tests.csproj -c Release
+
       # One self-contained .exe: no .NET install needed on the laptop.
       - name: Publish
         run: >

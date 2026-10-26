@@ -64,6 +64,8 @@ public partial class MainWindow : Window
         CopyIpBtn.Click += (_, _) => { if (_session.Link.LaptopIp != null) Clipboard.SetText(_session.Link.LaptopIp); };
         OpenLogsBtn.Click += (_, _) => { Directory.CreateDirectory(Core.EventLog.Folder); Process.Start("explorer.exe", Core.EventLog.Folder); };
         SaveBtn.Click += (_, _) => SaveSettings();
+        RefreshCoopClientsBtn.Click += async (_, _) => await LoadCoopClientsAsync();
+        ApplyCoopBtn.Click += async (_, _) => await ApplyCoopAsync();
 
         _session.Changed += () => Dispatcher.BeginInvoke(Refresh);
         Refresh();
@@ -107,6 +109,7 @@ public partial class MainWindow : Window
 
     private void Refresh()
     {
+        RefreshCoopPresence();
         var link = _session.Link;
         var active = _session.Active;
 
@@ -273,7 +276,64 @@ public partial class MainWindow : Window
         StartupBox.IsChecked = _settings.StartWithWindows;
         ApolloUserBox.Text = _settings.ApolloUser ?? "";
         ApolloPassBox.Password = _settings.ApolloPassword ?? "";
+        CoopBox.IsChecked = _settings.CoopEnabled;
+        CoopResultText.Foreground = Warn;
+        CoopResultText.Text = _apollo.CoopApplyPending
+            ? "Previous Apply is unresolved. Disconnect the guest, then retry Apply or uncheck and Apply to restore."
+            : "";
+        RefreshCoopPresence();
         SavedText.Text = "";
+    }
+
+    private void RefreshCoopPresence()
+    {
+        var clients = _apollo.Clients;
+        CoopPresenceText.Text = clients == null
+            ? _apollo.ClientStatusError ?? "Active client count unavailable. Refresh paired phones to choose the guest."
+            : $"Active Apollo clients: {_apollo.ActiveClientCount?.ToString() ?? "unknown"}. " +
+                string.Join("; ", clients.Select(c => $"{c.Name}: {(c.Connected ? "streaming" : "disconnected")}"));
+    }
+
+    private async Task LoadCoopClientsAsync()
+    {
+        RefreshCoopClientsBtn.IsEnabled = ApplyCoopBtn.IsEnabled = false;
+        try
+        {
+            var selected = (CoopGuestBox.SelectedItem as ApolloClientPresence)?.Uuid ?? _apollo.CoopGuestUuid;
+            var (clients, error) = await _apollo.ListClientsAsync();
+            if (error != null) { CoopResultText.Foreground = Bad; CoopResultText.Text = error; return; }
+            CoopGuestBox.ItemsSource = clients;
+            CoopGuestBox.SelectedItem = clients?.FirstOrDefault(c => c.Uuid == selected);
+            CoopResultText.Foreground = Muted;
+            CoopResultText.Text = "Select the guest phone explicitly. Custom commands will be preserved.";
+        }
+        finally { RefreshCoopClientsBtn.IsEnabled = ApplyCoopBtn.IsEnabled = true; }
+    }
+
+    private async Task ApplyCoopAsync()
+    {
+        bool enabled = CoopBox.IsChecked == true;
+        var guest = CoopGuestBox.SelectedItem as ApolloClientPresence;
+        if (enabled && guest == null)
+        { CoopResultText.Foreground = Bad; CoopResultText.Text = "Refresh paired phones and select the guest first."; return; }
+        var message = enabled
+            ? $"Apply guest permissions to {guest!.Name} ({guest.Uuid})?\n\nAllows viewing and controller input, without launching or ending games. Custom commands are preserved, including elevated commands. Confirm this is the intended guest phone."
+            : "Disable co-op and restore the saved guest record? The guest must be disconnected. Custom commands and original permissions will be restored.";
+        if (MessageBox.Show(this, message, "Apply co-op", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK) return;
+        RefreshCoopClientsBtn.IsEnabled = ApplyCoopBtn.IsEnabled = CoopBox.IsEnabled = CoopGuestBox.IsEnabled = false;
+        try
+        {
+            CoopResultText.Foreground = Muted;
+            CoopResultText.Text = "Reading current Apollo guest settings...";
+            var error = await _apollo.ApplyCoopAsync(enabled, guest?.Uuid);
+            CoopResultText.Foreground = error == null ? Good : Bad;
+            CoopResultText.Text = error ?? (enabled
+                ? "Co-op enabled. Guest permissions applied; custom commands preserved. Apollo was not restarted."
+                : "Co-op disabled. Previous guest settings restored. Apollo was not restarted.");
+            if (error == null) CoopBox.IsChecked = _settings.CoopEnabled;
+            RefreshCoopPresence();
+        }
+        finally { RefreshCoopClientsBtn.IsEnabled = ApplyCoopBtn.IsEnabled = CoopBox.IsEnabled = CoopGuestBox.IsEnabled = true; }
     }
 
     private void SaveSettings()
