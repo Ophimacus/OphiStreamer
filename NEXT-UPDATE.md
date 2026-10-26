@@ -1,6 +1,16 @@
 # Two-phone co-op and session learning
 
-Status: implementation in progress. No new public release until builds and policy tests pass.
+Status: implemented in Windows 0.3.0 and Android 0.5.0. Both release builds passed on 2026-10-26, including 24 Windows policy checks and 20 Android tests. Downloadable prerelease updates are published; the physical two-phone acceptance test below is still pending.
+
+## Try the update
+
+1. Install the [Windows update](https://github.com/Ophimacus/OphiStreamer/releases/download/windows-latest/OphiStreamerSetup.exe) and the [Android update](https://github.com/Ophimacus/OphiStreamer-Android/releases/download/latest/OphiStreamer-arm64.apk) on both phones.
+2. Keep the laptop and guest phone on the first phone's 5 GHz hotspot. Pair the guest manually with Apollo, then disconnect both streams for setup.
+3. In Windows Settings, save/test the Apollo login, refresh paired phones, select the guest, check **Allow two phones (co-op)** and click **Apply co-op**.
+4. On phone 2, open the quick menu's **App** tab and enable **This phone joins another player**. Start streaming from the host phone first; after video appears, tap **Join game** on the guest. The game must support local multiplayer.
+5. For learning, open **App → Session learning → Learn from my streams**. Select Solo, Co-op host or Guest to inspect that role's reports. Learning is optional and off by default; accept a suggestion with **Apply next stream**.
+
+Build evidence: [Windows build and checks](https://github.com/Ophimacus/OphiStreamer/actions/runs/40397524106), [Android build and tests](https://github.com/Ophimacus/OphiStreamer-Android/actions/runs/40397803449).
 
 ## Verified Apollo behaviour
 
