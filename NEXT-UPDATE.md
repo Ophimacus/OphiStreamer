@@ -1,6 +1,6 @@
 # Two-phone co-op and session learning
 
-Status: implemented in Windows 0.3.0 and Android 0.5.0. Both release builds passed on 2026-10-26, including 24 Windows policy checks and 20 Android tests. Downloadable prerelease updates are published; the physical two-phone acceptance test below is still pending.
+Status: implemented in Windows 0.3.0 and Android 0.6.0. The Windows build passed 24 policy checks; Android's expanded player-view, controls, co-op and learning suite passed 28 tests. These are prerelease updates; the physical two-phone acceptance test below is still pending.
 
 ## Try the update
 
@@ -10,7 +10,7 @@ Status: implemented in Windows 0.3.0 and Android 0.5.0. Both release builds pass
 4. On phone 2, open the quick menu's **App** tab and enable **This phone joins another player**. Start streaming from the host phone first; after video appears, tap **Join game** on the guest. The game must support local multiplayer.
 5. For learning, open **App → Session learning → Learn from my streams**. Select Solo, Co-op host or Guest to inspect that role's reports. Learning is optional and off by default; accept a suggestion with **Apply next stream**.
 
-Build evidence: [Windows build and checks](https://github.com/Ophimacus/OphiStreamer/actions/runs/40397524106), [Android build and tests](https://github.com/Ophimacus/OphiStreamer-Android/actions/runs/40397803449).
+Build evidence: [Windows build and checks](https://github.com/Ophimacus/OphiStreamer/actions/runs/40397524106), [Android build and tests](https://github.com/Ophimacus/OphiStreamer-Android/actions/runs/40424880015).
 
 ## Verified Apollo behaviour
 
@@ -50,6 +50,20 @@ Co-op mode describes supported app behaviour, not a hard server limit: Apollo ma
 - Recommendations need two qualifying sessions at matching settings, each at least 2 minutes and 300 delivered frames, with recent evidence. Exclude network changes and counter discontinuities.
 - Repeated network-frame loss can recommend a lower bitrate; repeated decoder delay beyond the frame budget can recommend lower FPS.
 - No automatic quality increases, codec guesses or mid-session changes. A player can accept a reduction for the next matching stream, cancel it, or keep manual settings. Saved solo settings are not overwritten.
+
+## Individual player views (Android 0.6.0)
+
+- During a stream, open **Quick menu → Display → Player view**. Choose **Player 1** on one phone and **Player 2** on the other. Choose **Left / right** or **Top / bottom** to match the game's actual split-screen layout. These labels select picture sections; they do not assign controller slots.
+- This is local picture cropping from the same captured game. It does not create a second virtual monitor, render another camera, reduce received bandwidth, or change the stream resolution. Each phone still decodes the full stream. The selected section fits without distortion, so black bars may remain and detail is limited by the original split-screen resolution.
+- **Show full picture for menus** temporarily reveals the whole screen. **Return to my player view** restores the selected section without changing its saved profile. No automatic menu detection is attempted.
+- Selection is saved separately on each phone for each PC and streamed app. Launching all games through the Desktop entry shares the Desktop profile; launch individual game entries for individual profiles.
+- Crop affects the video surface only. Touch controls remain on the full phone screen, with Auto / Always / Off, existing themes, and live layout editing under **Controls**. Auto hides touch controls when a physical controller connects and shows them when it leaves. Hiding touch controls releases their held inputs.
+- Each phone uses its own Apollo input context, with no manual P1/P2 gamepad offset. The guest still needs controller permission from Windows co-op setup, and the game assigns the actual players. USB/Bluetooth controllers and touch gamepad buttons are supported on the guest.
+- Cropped-picture background taps do not send mouse clicks at incorrect coordinates. Use controller/touch gamepad input there; return to Full picture for desktop mouse use. Free zoom is available only with Full picture selected.
+- Available with the standard 2D renderer on Android 7+. Older Android and AI 3D modes retain Full picture.
+- Start with Sparking! ZERO's local split-screen mode. Keep Full picture for Demon Slayer 1/2 unless an actual separate-view layout is confirmed; cropping cannot create a missing camera.
+
+Device checks: confirm both selected halves and HUDs, full-picture menu switching, rotation, reconnect/relaunch persistence, and mixed physical/touch controls. Android layout tests verify measured viewport and video bounds but cannot confirm the device's hardware surface composition.
 
 ## Acceptance test before public release
 
